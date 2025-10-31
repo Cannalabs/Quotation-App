@@ -5,6 +5,8 @@ import logging
 import tempfile
 import os
 import json
+import requests
+import base64
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -101,15 +103,19 @@ Best regards,
             temp_file_path = None
             if quotation_data:
                 try:
-                    # Use the existing quote print template to generate PDF
+                    # Use the HTML template (matching QuotePrint.jsx) to generate PDF
+                    logger.info(f"Starting PDF generation for quotation {quotation_number}")
                     pdf_path = await self._generate_pdf_from_template(quotation_data)
-                    if pdf_path:
+                    if pdf_path and os.path.exists(pdf_path):
                         attachments.append(pdf_path)
                         temp_file_path = pdf_path
-                        logger.info(f"PDF attachment generated for quotation {quotation_number}")
+                        pdf_size = os.path.getsize(pdf_path)
+                        logger.info(f"PDF attachment generated successfully for quotation {quotation_number}: {pdf_path} ({pdf_size} bytes)")
+                    else:
+                        logger.warning(f"PDF generation returned None or file doesn't exist for quotation {quotation_number}")
                 except Exception as e:
-                    logger.warning(f"Failed to generate PDF attachment: {str(e)}")
-                    # Continue without PDF attachment
+                    logger.error(f"Failed to generate PDF attachment for quotation {quotation_number}: {str(e)}", exc_info=True)
+                    # Continue without PDF attachment - DO NOT use ReportLab fallback
 
             # Create message
             message = MessageSchema(
@@ -214,68 +220,87 @@ Best regards,
             # Create a simple HTML version of the quote
             html_content = self._generate_html_quote(quotation_data)
             
-            # Generate PDF using pdfkit (wkhtmltopdf)
+            # Generate PDF using wkhtmltopdf directly (no ReportLab fallback to ensure correct template)
+            import subprocess
+                
+            # Create PDF file
+            pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
+            pdf_path.close()
+            
+            # Find wkhtmltopdf binary
+            which_result = subprocess.run(['which', 'wkhtmltopdf'], capture_output=True, text=True)
+            wkhtmltopdf_paths = [
+                '/usr/local/bin/wkhtmltopdf',
+                '/usr/bin/wkhtmltopdf',
+                which_result.stdout.strip() if which_result.returncode == 0 else None
+            ]
+            wkhtmltopdf_path = next((p for p in wkhtmltopdf_paths if p and os.path.exists(p)), None)
+            
+            if not wkhtmltopdf_path:
+                logger.error("wkhtmltopdf binary not found in any standard location")
+                raise Exception("wkhtmltopdf binary not found. Cannot generate PDF with correct template.")
+            
+            logger.info(f"Using wkhtmltopdf at: {wkhtmltopdf_path}")
+            
+            # Save HTML to temporary file
+            html_temp = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html', encoding='utf-8')
+            html_temp.write(html_content)
+            html_temp.close()
+            
             try:
-                # Create PDF using pdfkit
-                pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-                pdf_path.close()
+                # Use xvfb-run for headless rendering
+                cmd = [
+                    'xvfb-run', '-a', '--server-args=-screen 0 1024x768x24', wkhtmltopdf_path,
+                    '--page-size', 'A4',
+                    '--margin-top', '0.75in',
+                    '--margin-right', '0.75in',
+                    '--margin-bottom', '0.75in',
+                    '--margin-left', '0.75in',
+                    '--encoding', 'UTF-8',
+                '--enable-local-file-access',
+                '--load-error-handling', 'ignore',
+                '--load-media-error-handling', 'ignore',
+                '--quiet'
+                ]
                 
-                # Configure pdfkit options
-                options = {
-                    'page-size': 'A4',
-                    'margin-top': '0.75in',
-                    'margin-right': '0.75in',
-                    'margin-bottom': '0.75in',
-                    'margin-left': '0.75in',
-                    'encoding': "UTF-8",
-                    'enable-local-file-access': None,
-                    # Harden against external/network resource failures
-                    'load-error-handling': 'ignore',
-                    'load-media-error-handling': 'ignore',
-                    'no-stop-slow-scripts': None,
-                    'quiet': None,
-                    'disable-external-links': None,
-                }
+                # Don't use --no-images - we want to include logos
+                # Logo will be hidden via onerror if URL is invalid
                 
-                # Convert HTML to PDF
-                pdfkit.from_string(html_content, pdf_path.name, options=options)
+                cmd.extend([html_temp.name, pdf_path.name])
                 
-                logger.info(f"Generated PDF quote with pdfkit: {pdf_path.name}")
+                logger.info(f"Running wkhtmltopdf command: {' '.join(cmd[:5])}... [html] [pdf]")
                 
-                # Clean up the data file
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=30,
+                    check=False
+                )
+                
+                if result.returncode != 0:
+                    error_msg = result.stderr or result.stdout or "Unknown error"
+                    logger.error(f"wkhtmltopdf failed (exit code {result.returncode}): {error_msg[:500]}")
+                    raise Exception(f"wkhtmltopdf failed (exit code {result.returncode}): {error_msg[:200]}")
+                
+                if not os.path.exists(pdf_path.name):
+                    raise Exception("PDF file was not created by wkhtmltopdf")
+                
+                if os.path.getsize(pdf_path.name) == 0:
+                    raise Exception("PDF file is empty")
+                
+                logger.info(f"Successfully generated PDF quote with wkhtmltopdf: {pdf_path.name} ({os.path.getsize(pdf_path.name)} bytes)")
+                
+            finally:
+                # Clean up HTML temp file
+                if os.path.exists(html_temp.name):
+                    os.unlink(html_temp.name)
+            
+            # Clean up the data file
+            if os.path.exists(temp_data_file.name):
                 os.unlink(temp_data_file.name)
-                
-                return pdf_path.name
-                
-            except Exception as pdf_error:
-                logger.error(f"Failed to generate PDF with pdfkit: {str(pdf_error)}")
-                # Fallback to ReportLab
-                try:
-                    pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix='.pdf')
-                    pdf_path.close()
-                    
-                    self._generate_pdf_with_reportlab(quotation_data, pdf_path.name)
-                    
-                    logger.info(f"Fallback: Generated PDF with ReportLab: {pdf_path.name}")
-                    
-                    # Clean up the data file
-                    os.unlink(temp_data_file.name)
-                    
-                    return pdf_path.name
-                    
-                except Exception as reportlab_error:
-                    logger.error(f"ReportLab fallback also failed: {str(reportlab_error)}")
-                    # Final fallback to HTML file
-                    temp_html_file = tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.html')
-                    temp_html_file.write(html_content)
-                    temp_html_file.close()
-                    
-                    logger.info(f"Final fallback: Generated HTML quote template: {temp_html_file.name}")
-                    
-                    # Clean up the data file
-                    os.unlink(temp_data_file.name)
-                    
-                    return temp_html_file.name
+            
+            return pdf_path.name
             
         except Exception as e:
             logger.error(f"Failed to generate PDF from template: {str(e)}")
@@ -481,12 +506,15 @@ Best regards,
         """
         company_settings = quotation_data.get('company_settings', {})
         customer = quotation_data.get('customer', {})
-        line_items = quotation_data.get('line_items', [])
+        # Handle both 'items' (from QuotePrint/frontend) and 'line_items' (legacy)
+        line_items = quotation_data.get('items', quotation_data.get('line_items', []))
         totals = quotation_data.get('totals', {})
         quotation_number = quotation_data.get('quotation_number', 'N/A')
         date = quotation_data.get('date', 'N/A')
         valid_until = quotation_data.get('valid_until', 'N/A')
         notes = quotation_data.get('notes', '')
+        discount = quotation_data.get('discount', {})
+        vat_rate = quotation_data.get('vat_rate', 4)
         
         # Format currency
         def format_currency(amount, currency='EUR'):
@@ -532,6 +560,7 @@ Best regards,
             address_lines.append(city_postal)
         if country:
             address_lines.append(country)
+        # Each address line will be a separate div for better formatting
         address_html = "<br>".join(address_lines)
 
         # Prepare company contact
@@ -547,6 +576,39 @@ Best regards,
         bank_iban = company_settings.get('iban') or ''
         bank_bic_swift = company_settings.get('bic_swift') or ''
         bank_address_html = "<br>".join([x for x in [bank_address_line1, bank_address_line2] if x])
+        
+        # Handle logo - download and convert to base64 if it's a URL, or use as-is if it's already base64
+        logo_html = ''
+        logo_url = company_settings.get('logo_url', '')
+        if logo_url:
+            try:
+                # Check if it's already a data URI (base64)
+                if logo_url.startswith('data:'):
+                    logo_html = f'<img src="{logo_url}" alt="Company Logo" class="company-logo" style="max-width: 120px; max-height: 60px; object-fit: contain;" onerror="this.style.display=\'none\';" />'
+                elif logo_url.startswith('http://') or logo_url.startswith('https://'):
+                    # Download and convert to base64
+                    try:
+                        response = requests.get(logo_url, timeout=5, allow_redirects=True)
+                        if response.status_code == 200:
+                            # Get content type
+                            content_type = response.headers.get('Content-Type', 'image/png')
+                            # Convert to base64
+                            img_base64 = base64.b64encode(response.content).decode('utf-8')
+                            data_uri = f'data:{content_type};base64,{img_base64}'
+                            logo_html = f'<img src="{data_uri}" alt="Company Logo" class="company-logo" style="max-width: 120px; max-height: 60px; object-fit: contain;" />'
+                            logger.info(f"Logo downloaded and converted to base64: {len(img_base64)} bytes")
+                        else:
+                            logger.warning(f"Failed to download logo: HTTP {response.status_code}")
+                    except Exception as e:
+                        logger.warning(f"Failed to download logo from {logo_url}: {e}")
+                        # Fallback to direct URL
+                        logo_html = f'<img src="{logo_url}" alt="Company Logo" class="company-logo" style="max-width: 120px; max-height: 60px; object-fit: contain;" onerror="this.style.display=\'none\';" />'
+                else:
+                    # Assume it's a local path or direct URL
+                    logo_html = f'<img src="{logo_url}" alt="Company Logo" class="company-logo" style="max-width: 120px; max-height: 60px; object-fit: contain;" onerror="this.style.display=\'none\';" />'
+            except Exception as e:
+                logger.warning(f"Error processing logo URL: {e}")
+                logo_html = f'<img src="{logo_url}" alt="Company Logo" class="company-logo" style="max-width: 120px; max-height: 60px; object-fit: contain;" onerror="this.style.display=\'none\';" />'
 
         html = f"""
         <!DOCTYPE html>
@@ -593,7 +655,7 @@ Best regards,
                     width: 210mm;
                     min-height: 297mm;
                     box-sizing: border-box;
-                    padding: 20mm 14mm 50mm 14mm; /* increased bottom padding to avoid footer overlap */
+                    padding: 20mm 14mm 32mm 14mm;
                     background: white;
                     position: relative;
                     box-shadow: 0 0 5px rgba(0,0,0,0.1);
@@ -693,29 +755,49 @@ Best regards,
                 .disc-col {{ width: 45px; text-align: right; }}
                 .total-col {{ width: 55px; text-align: right; }}
                 
-                /* Totals Section */
+                /* Totals Section - Right Aligned */
                 .totals-section {{
                     margin-top: 25px;
-                    display: flex;
-                    justify-content: flex-end;
                     margin-bottom: 30px;
+                    text-align: right;
+                    width: 100%;
                 }}
                 
                 .totals-table {{
-                    width: 250px; /* Wider for better spacing */
-                    font-size: 13px; /* Increased from 12px */
+                    width: 280px;
+                    margin-left: auto;
+                    margin-right: 0;
+                    font-size: 13px;
+                    text-align: right;
                 }}
                 
                 .totals-row {{
-                    display: flex;
-                    justify-content: space-between;
-                    padding: 6px 0; /* Increased padding */
+                    display: table-row;
+                }}
+                
+                .totals-row span {{
+                    display: table-cell;
+                    padding: 6px 0;
                     border-bottom: 1px solid #eee;
+                    text-align: left;
+                }}
+                
+                .totals-row span:first-child {{
+                    text-align: left;
+                    padding-right: 20px;
+                }}
+                
+                .totals-row span:last-child {{
+                    text-align: right;
+                    font-weight: normal;
                 }}
                 
                 .totals-row.total-final {{
                     font-weight: bold;
-                    font-size: 16px; /* Increased from 14px */
+                }}
+                
+                .totals-row.total-final span {{
+                    font-size: 16px;
                     border-bottom: 2px solid #333;
                     border-top: 2px solid #333;
                     margin-top: 10px;
@@ -723,14 +805,27 @@ Best regards,
                     padding-bottom: 10px;
                 }}
                 
+                .totals-row.total-final span:last-child {{
+                    font-weight: bold;
+                }}
+                
                 .payment-term-section {{
                     margin: 8px 0;
-                    font-size: 12px; /* Increased from 11px */
+                    font-size: 12px;
                     font-weight: bold;
                     padding: 6px 0;
                     border-bottom: 1px solid #eee;
-                    display: flex;
-                    justify-content: space-between;
+                    display: table-row;
+                }}
+                
+                .payment-term-section span {{
+                    display: table-cell;
+                    text-align: left;
+                    padding-right: 20px;
+                }}
+                
+                .payment-term-section span:last-child {{
+                    text-align: right;
                 }}
                 
                 /* Footer - Fixed to Bottom */
@@ -743,16 +838,25 @@ Best regards,
                     padding: 4mm 14mm 4mm 14mm;
                     background: white;
                     border-top: 1px solid #ddd;
-                    font-size: 11px; /* Increased from 10px */
+                    font-size: 11px;
                     line-height: 1.4;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: flex-start;
+                    width: 100%;
+                    box-sizing: border-box;
+                    display: table;
+                    table-layout: fixed;
                     z-index: 10;
                 }}
                 
                 .footer-left, .footer-right {{
-                    width: 48%;
+                    display: table-cell;
+                    width: 50%;
+                    vertical-align: top;
+                    padding-right: 15px;
+                }}
+                
+                .footer-right {{
+                    padding-right: 0;
+                    padding-left: 15px;
                 }}
                 
                 .footer .company-name {{
@@ -801,8 +905,23 @@ Best regards,
                         overflow: visible;
                     }}
                     .no-print {{ display: none !important; }}
-                    .footer, .page-number {{
-                        position: fixed;
+                    .footer {{
+                        position: fixed !important;
+                        width: 100% !important;
+                        display: table !important;
+                        table-layout: fixed !important;
+                    }}
+                    .footer-left, .footer-right {{
+                        display: table-cell !important;
+                        width: 50% !important;
+                        vertical-align: top !important;
+                    }}
+                    .footer-right {{
+                        padding-left: 15px !important;
+                        padding-right: 0 !important;
+                    }}
+                    .page-number {{
+                        position: fixed !important;
                     }}
                 }}
             </style>
@@ -815,11 +934,7 @@ Best regards,
 
                         <!-- Company Logo Section -->
                         <div class="company-logo-section">
-                            <img 
-                                src="{company_settings.get('logo_url', '')}" 
-                                alt="Company Logo" 
-                                class="company-logo" 
-                            />
+                            {logo_html}
                         </div>
 
                         <!-- Main Title -->
@@ -879,12 +994,14 @@ Best regards,
         # Add line items
         for idx, item in enumerate(line_items, start=1):
             total_price = item.get('quantity', 0) * item.get('unit_price', 0)
-            discount_value = 0  # You can add discount logic here
+            # Handle discount like QuotePrint.jsx: discount?.type === 'percentage' ? discount.value : 0
+            discount_value = discount.get('value', 0) if discount.get('type') == 'percentage' else 0
             discounted_price = item.get('unit_price', 0) * (1 - discount_value / 100)
             
-            # Get product details similar to frontend
-            display_name = item.get('product_name_snapshot', item.get('description', ''))
-            display_sku = item.get('product_code_snapshot', item.get('sku', ''))
+            # Get product details - match QuotePrint.jsx: item.product_name_snapshot || item.product_name
+            display_name = item.get('product_name_snapshot') or item.get('product_name') or item.get('description', '')
+            # Match QuotePrint.jsx: item.product_code_snapshot || item.sku
+            display_sku = item.get('product_code_snapshot') or item.get('sku', '')
             
             html += f"""
                                 <tr>
@@ -895,8 +1012,8 @@ Best regards,
                                             <div style="font-size: 10px; color: #666;">{display_sku}</div>
                                         </div>
                                     </td>
-                                    <td class=\"qty-col\">{item.get('quantity', 0):.3f}</td>
-                                    <td class="tax-col">VAT at {quotation_data.get('vat_rate', 4)}%</td>
+                                    <td class="qty-col">{item.get('quantity', 0):.3f}</td>
+                                    <td class="tax-col">VAT at {vat_rate}%</td>
                                     <td class="price-col">{format_currency(item.get('unit_price', 0))}</td>
                                     <td class="disc-col">{discount_value}%</td>
                                     <td class="price-col">{format_currency(discounted_price)}</td>
@@ -908,34 +1025,34 @@ Best regards,
                             </tbody>
                         </table>
 
-                        <!-- Totals Section -->
+                        <!-- Totals Section - Right Aligned -->
                         <div class="totals-section">
-                            <div class="totals-table">
-                                <div class="totals-row">
-                                    <span>Total Without VAT</span>
-                                    <span>{format_currency((totals.get('subtotal', 0) - totals.get('discountAmount', 0)))}</span>
-                                </div>
+                            <table class="totals-table" style="margin-left: auto; margin-right: 0;">
+                                <tr class="totals-row">
+                                    <td style="text-align: left; padding-right: 20px; padding-bottom: 6px; border-bottom: 1px solid #eee;">Total Without VAT</td>
+                                    <td style="text-align: right; padding-bottom: 6px; border-bottom: 1px solid #eee;">{format_currency((totals.get('subtotal', 0) - totals.get('discountAmount', 0)))}</td>
+                                </tr>
                                 
-                                <div class="totals-row">
-                                    <span>Discount</span>
-                                    <span>-{format_currency(totals.get('discountAmount', 0))}</span>
-                                </div>
+                                <tr class="totals-row">
+                                    <td style="text-align: left; padding-right: 20px; padding: 6px 0; border-bottom: 1px solid #eee;">Discount</td>
+                                    <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">-{format_currency(totals.get('discountAmount', 0))}</td>
+                                </tr>
                                 
-                                <div class="payment-term-section">
-                                    <span>Payment Term</span>
-                                    <span>Prepaid</span>
-                                </div>
+                                <tr class="payment-term-section">
+                                    <td style="text-align: left; padding-right: 20px; padding: 6px 0; border-bottom: 1px solid #eee; font-weight: bold;">Payment Term</td>
+                                    <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee; font-weight: bold;">Prepaid</td>
+                                </tr>
                                 
-                                <div class="totals-row">
-                                    <span>VAT ({quotation_data.get('vat_rate', 4)}%)</span>
-                                    <span>{format_currency(totals.get('vatAmount', totals.get('taxAmount', 0)))}</span>
-                                </div>
+                                <tr class="totals-row">
+                                    <td style="text-align: left; padding-right: 20px; padding: 6px 0; border-bottom: 1px solid #eee;">VAT ({vat_rate}%)</td>
+                                    <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">{format_currency(totals.get('vatAmount', totals.get('taxAmount', 0)))}</td>
+                                </tr>
                                 
-                                <div class="totals-row total-final">
-                                    <span>Total</span>
-                                    <span>{format_currency(totals.get('total', 0))}</span>
-                                </div>
-                            </div>
+                                <tr class="totals-row total-final">
+                                    <td style="text-align: left; padding-right: 20px; padding: 10px 0; border-top: 2px solid #333; border-bottom: 2px solid #333; font-weight: bold; font-size: 16px;">Total</td>
+                                    <td style="text-align: right; padding: 10px 0; border-top: 2px solid #333; border-bottom: 2px solid #333; font-weight: bold; font-size: 16px;">{format_currency(totals.get('total', 0))}</td>
+                                </tr>
+                            </table>
                         </div>
 
                         <!-- Notes Section -->
@@ -956,20 +1073,19 @@ Best regards,
                 <!-- Footer - Fixed to Bottom -->
                 <div class="footer">
                     <div class="footer-left">
-                        <div class="company-name">{company_settings.get('company_name', '')}</div>
-                        {f"<div>{address_html}</div>" if address_html else ''}
-                        {f"<div>{company_email}</div>" if company_email else ''}
-                        {f"<div>{company_website}</div>" if company_website else ''}
-                        {f"<div>VAT {vat_number}</div>" if vat_number else ''}
+                        <div class="company-name">{company_settings.get('company_name', 'Grow United Italia SRL')}</div>
+                        <div>{address_html if address_html else 'Via Paleocapa 1<br>Milano, 20121<br>Italy'}</div>
+                        <div>{company_email or 'administration@growunited.it'}</div>
+                        <div>{company_website or 'www.canna-it.com'}</div>
+                        <div>IVA {vat_number or 'IT13328670966'}</div>
                     </div>
-                    
                     <div class="footer-right">
                         <div class="bank-title">Bank Details:</div>
-                        {f"<div>{bank_name_branch}</div>" if bank_name_branch else ''}
-                        {f"<div>{bank_address_html}</div>" if bank_address_html else ''}
-                        {f"<div>Account No.: {bank_account_number}</div>" if bank_account_number else ''}
-                        {f"<div>IBAN-code: {bank_iban}</div>" if bank_iban else ''}
-                        {f"<div>BIC/Swift: {bank_bic_swift}</div>" if bank_bic_swift else ''}
+                        <div>{bank_name_branch or 'BANCA PASSADORE & C. S.P.A. - CORSO MATTEOTTI, 7 - MILANO 20121'}</div>
+                        <div>{bank_address_html if bank_address_html else ''}</div>
+                        <div>Account nr.: {bank_account_number or '1118520'}</div>
+                        <div>IBAN-code: {bank_iban or 'IT87I0333201600000001118520'}</div>
+                        <div>BIC/Swift: {bank_bic_swift or 'PASBITGG'}</div>
                     </div>
                 </div>
 

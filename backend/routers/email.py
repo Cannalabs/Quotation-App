@@ -111,7 +111,6 @@ async def save_email_config(
     """
     try:
         # Update the email service configuration
-        from email_service import email_service
         from config import settings
         
         # Update settings (this will only affect the current session)

@@ -477,20 +477,26 @@ export default function QuoteBuilder() {
 
       const totalsForEmail = await calculateTotals();
 
-      // Prepare quotation data for PDF generation
+      // Prepare quotation data for PDF generation (matching QuotePrint structure)
       const quotationDataForPDF = {
         quotation_number: quotationData.quotation_number,
-        date: format(new Date(quotationData.date), 'dd/MM/yyyy'),
-        valid_until: format(new Date(quotationData.valid_until), 'dd/MM/yyyy'),
+        date: quotationData.date, // Keep ISO format for backend processing
+        valid_until: quotationData.valid_until, // Keep ISO format for backend processing
         company_settings: companySettings,
         customer: selectedCustomer,
-        line_items: lineItems.map(item => ({
-          description: item.description,
+        items: lineItems.map((item) => ({
+          product_name: item.name,
+          product_name_snapshot: item.name,
+          sku: item.sku,
+          product_code_snapshot: item.sku,
           quantity: item.quantity,
           unit_price: item.unit_price,
-          total: item.quantity * item.unit_price
+          description: item.description || ""
         })),
         totals: totalsForEmail,
+        discount: { type: discountType, value: discountValue },
+        vat_rate: totalsForEmail.vatRate || 4,
+        currency: "EUR",
         terms_and_conditions: quotationData.terms_and_conditions,
         notes: quotationNotes
       };

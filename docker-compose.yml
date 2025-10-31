@@ -18,7 +18,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql+asyncpg://growuser:${POSTGRES_PASSWORD:-your_secure_password}@postgres:5432/grow
+      DATABASE_URL: postgresql+asyncpg://growuser:root%40123@postgres:5432/grow
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,https://yourdomain.com}
     depends_on:
       - postgres

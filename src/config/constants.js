@@ -1,7 +1,7 @@
 // Application Configuration Constants
 export const CONFIG = {
   // API Configuration
-  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || "http://192.168.1.76:3000",
+  API_BASE_URL: "",
   
   // Company Defaults
   DEFAULT_COMPANY_NAME: "Grow United Italy",
