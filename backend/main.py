@@ -51,7 +51,7 @@ def read_item_root(item_id: int, q: str | None = None):
 # API test routes
 @app.get("/api/")
 def read_root():
-    return {"status": "ok", "message": "FastAPI is running"}
+    return {"status": "ok", "message": "FastAPI is running - UPDATED from server!"}
 
 @app.get("/api/hello")
 def hello(name: str = "world"):
