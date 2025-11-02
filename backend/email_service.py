@@ -906,9 +906,15 @@ Best regards,
                     position: fixed;
                     bottom: 8mm;
                     left: 50%;
-                    margin-left: 196mm; /* Center page (105mm) + page width - right padding */
+                    margin-left: 91mm; /* Position: page center (105mm) - 14mm padding from right = 91mm from center */
                     font-size: 11px; /* Increased from 10px */
                     z-index: 11;
+                    color: #333;
+                    white-space: nowrap;
+                    display: block;
+                    visibility: visible;
+                    opacity: 1;
+                    text-align: right;
                 }}
                 
                 /* Print Styles */
@@ -967,7 +973,10 @@ Best regards,
                     .page-number {{
                         position: fixed !important;
                         left: 50% !important;
-                        margin-left: 196mm !important; /* Center page (105mm) + page width - right padding */
+                        margin-left: 91mm !important; /* Position from center: (210mm/2) - 14mm padding = 91mm */
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        display: block !important;
                     }}
                 }}
             </style>
