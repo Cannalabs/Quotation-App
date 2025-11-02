@@ -252,15 +252,18 @@ Best regards,
                 cmd = [
                     'xvfb-run', '-a', '--server-args=-screen 0 1024x768x24', wkhtmltopdf_path,
                     '--page-size', 'A4',
-                    '--margin-top', '0.75in',
-                    '--margin-right', '0.75in',
-                    '--margin-bottom', '0.75in',
-                    '--margin-left', '0.75in',
+                    '--margin-top', '0',
+                    '--margin-right', '0',
+                    '--margin-bottom', '0',
+                    '--margin-left', '0',
                     '--encoding', 'UTF-8',
-                '--enable-local-file-access',
-                '--load-error-handling', 'ignore',
-                '--load-media-error-handling', 'ignore',
-                '--quiet'
+                    '--enable-local-file-access',
+                    '--load-error-handling', 'ignore',
+                    '--load-media-error-handling', 'ignore',
+                    '--print-media-type',
+                    '--no-stop-slow-scripts',
+                    '--javascript-delay', '500',
+                    '--quiet'
                 ]
                 
                 # Don't use --no-images - we want to include logos
@@ -620,9 +623,10 @@ Best regards,
                 /* External font import removed to avoid wkhtmltopdf network errors */
                 
                 /* Page Setup */
-                @page {{ 
-                    size: A4; 
+                @page {{
+                    size: A4;
                     margin: 0;
+                    margin-bottom: 40mm; /* Reserve space for footer on each page */
                 }}
                 
                 body {{ 
@@ -635,31 +639,40 @@ Best regards,
                     color: #333; /* Slightly darker text */
                 }}
                 
+                html {{
+                    margin: 0;
+                    padding: 0;
+                    width: 100%;
+                }}
+                
+                body {{
+                    text-align: center; /* Center align for wkhtmltopdf */
+                }}
+                
                 .print-document {{
                     width: 100%;
                     position: relative;
                     min-height: 100vh;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
+                    display: block;
+                    text-align: center; /* Center align content */
                 }}
 
                 .page-container {{
                     width: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
+                    display: inline-block;
+                    text-align: center;
                 }}
                 
                 .page {{
                     width: 210mm;
                     min-height: 297mm;
                     box-sizing: border-box;
-                    padding: 20mm 14mm 32mm 14mm;
+                    padding: 20mm 14mm 45mm 14mm; /* Increased bottom padding to 45mm to prevent footer overlap */
                     background: white;
                     position: relative;
-                    box-shadow: 0 0 5px rgba(0,0,0,0.1);
-                    margin-bottom: 10px;
+                    margin: 0 auto; /* Center the page */
+                    display: inline-block;
+                    text-align: left; /* Reset text-align inside page - content should be left-aligned */
                 }}
 
                 .page-header {{
@@ -685,29 +698,40 @@ Best regards,
                     color: #111;
                 }}
                 
-                /* Meta Information */
+                /* Meta Information - Table layout for wkhtmltopdf compatibility */
                 .meta-grid {{
-                    display: grid;
-                    grid-template-columns: 1fr 1fr 1fr;
-                    gap: 15px;
+                    display: table;
+                    width: 100%;
+                    table-layout: fixed;
+                    border-collapse: separate;
+                    border-spacing: 15px;
                     margin-bottom: 15px;
                     font-size: 12px; /* Increased from 11px */
                 }}
                 
                 .meta-item {{
-                    display: flex;
-                    flex-direction: column;
+                    display: table-cell;
+                    width: 33.33%;
+                    vertical-align: top;
+                    padding: 0;
                 }}
                 
                 .meta-label {{
                     font-weight: bold;
                     margin-bottom: 4px; /* Increased spacing */
+                    display: block;
+                }}
+                
+                .meta-value {{
+                    display: block;
                 }}
                 
                 .additional-meta {{
-                    display: grid;
-                    grid-template-columns: 1fr 1fr 1fr;
-                    gap: 15px;
+                    display: table;
+                    width: 100%;
+                    table-layout: fixed;
+                    border-collapse: separate;
+                    border-spacing: 15px;
                     margin-bottom: 25px;
                     font-size: 12px; /* Increased from 11px */
                 }}
@@ -828,23 +852,24 @@ Best regards,
                     text-align: right;
                 }}
                 
-                /* Footer - Fixed to Bottom */
+                /* Footer - Fixed to Bottom - Repeats on every page */
                 .footer {{
                     position: fixed;
                     bottom: 0;
-                    left: 0;
-                    right: 0;
+                    left: 50%;
+                    margin-left: -105mm; /* Half of 210mm to center */
+                    width: 210mm;
                     height: 30mm;
-                    padding: 4mm 14mm 4mm 14mm;
+                    padding: 4mm 30px 4mm 30px;
                     background: white;
                     border-top: 1px solid #ddd;
                     font-size: 11px;
                     line-height: 1.4;
-                    width: 100%;
                     box-sizing: border-box;
                     display: table;
                     table-layout: fixed;
                     z-index: 10;
+                    page-break-inside: avoid;
                 }}
                 
                 .footer-left, .footer-right {{
@@ -852,11 +877,17 @@ Best regards,
                     width: 50%;
                     vertical-align: top;
                     padding-right: 15px;
+                    text-align: left; /* Ensure footer content is left-aligned */
                 }}
                 
                 .footer-right {{
                     padding-right: 0;
                     padding-left: 15px;
+                    text-align: left; /* Ensure footer content is left-aligned */
+                }}
+                
+                .footer {{
+                    text-align: left; /* Ensure footer content is left-aligned, not center */
                 }}
                 
                 .footer .company-name {{
@@ -870,58 +901,73 @@ Best regards,
                     margin-bottom: 3px;
                 }}
                 
-                /* Page Number */
+                /* Page Number - Fixed to repeat on every page */
                 .page-number {{
                     position: fixed;
                     bottom: 8mm;
-                    right: 14mm;
+                    left: 50%;
+                    margin-left: 196mm; /* Center page (105mm) + page width - right padding */
                     font-size: 11px; /* Increased from 10px */
                     z-index: 11;
                 }}
                 
                 /* Print Styles */
                 @media print {{
-                    body {{ 
+                    html, body {{ 
                         background: white !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
-                        margin: 0;
-                        padding: 0;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        text-align: center !important; /* Center align for PDF */
+                        width: 100% !important;
                     }}
                     .print-document {{ 
-                        width: auto !important;
+                        width: 100% !important;
                         min-height: auto !important;
-                        display: block;
+                        display: block !important;
+                        text-align: center !important;
                     }}
                     .page-container {{
-                        display: block;
-                        width: auto;
+                        display: inline-block !important;
+                        width: auto !important;
+                        text-align: center !important;
                     }}
                     .page {{
-                        margin: 0;
-                        box-shadow: none;
+                        margin: 0 auto !important; /* Center the page */
+                        box-shadow: none !important;
                         page-break-after: auto; /* Changed from always to auto */
                         min-height: auto; /* Allow content to determine height */
+                        padding-bottom: 45mm !important; /* Increased to prevent footer overlap */
                         overflow: visible;
+                        display: inline-block !important;
+                        text-align: left !important; /* Reset text-align inside page */
                     }}
                     .no-print {{ display: none !important; }}
                     .footer {{
                         position: fixed !important;
-                        width: 100% !important;
+                        left: 50% !important;
+                        margin-left: -105mm !important; /* Half of 210mm to center */
+                        width: 210mm !important;
                         display: table !important;
                         table-layout: fixed !important;
+                        text-align: left !important; /* Ensure footer content is left-aligned */
                     }}
                     .footer-left, .footer-right {{
                         display: table-cell !important;
                         width: 50% !important;
                         vertical-align: top !important;
+                        text-align: left !important; /* Ensure footer content is left-aligned */
                     }}
                     .footer-right {{
                         padding-left: 15px !important;
                         padding-right: 0 !important;
+                        text-align: left !important; /* Ensure footer content is left-aligned */
                     }}
                     .page-number {{
                         position: fixed !important;
+                        left: 50% !important;
+                        margin-left: 196mm !important; /* Center page (105mm) + page width - right padding */
                     }}
                 }}
             </style>
@@ -1060,13 +1106,15 @@ Best regards,
         
         if notes:
             html += f"""
-                        <div class="notes-section" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px;">
+                        <div class="notes-section" style="margin-top: 20px; margin-bottom: 40px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px;">
                             <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">Additional Notes:</div>
                             <div style="font-size: 12px; line-height: 1.5; white-space: pre-wrap;">{notes}</div>
                         </div>
             """
         
         html += f"""
+                        <!-- Spacing before footer -->
+                        <div style="height: 40px;"></div>
                     </div>
                 </div>
 
