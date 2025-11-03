@@ -419,7 +419,7 @@ export default function CompanySettingsPage() {
   }
 
   return (
-    <div className="p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
+    <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
       <style>
         {`
           .clay-shadow {
@@ -463,8 +463,8 @@ export default function CompanySettingsPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-slate-800 mb-2">Company Settings</h1>
-            <p className="text-slate-600 text-lg">Manage your company profile and branding</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-2">Company Settings</h1>
+            <p className="text-slate-600 text-sm sm:text-base md:text-lg">Manage your company profile and branding</p>
           </div>
           
           <Button

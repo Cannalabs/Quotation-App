@@ -23,18 +23,18 @@ export default function RecentQuotes({ quotes, isLoading }) {
   };
 
   return (
-    <Card className="clay-shadow bg-gradient-to-br from-white/80 to-slate-50/60 border-none rounded-3xl backdrop-blur-sm">
-      <CardHeader className="flex flex-row items-center justify-between pb-4">
-        <CardTitle className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center">
-            <FileText className="w-5 h-5 text-purple-700" />
+    <Card className="clay-shadow bg-gradient-to-br from-white/80 to-slate-50/60 border-none rounded-3xl backdrop-blur-sm w-full min-w-0">
+      <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 gap-3 sm:gap-0">
+        <CardTitle className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2 sm:gap-3">
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-purple-100 to-purple-200 flex items-center justify-center flex-shrink-0">
+            <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-purple-700" />
           </div>
-          Recent Quotes
+          <span className="truncate">Recent Quotes</span>
         </CardTitle>
-        <Link to={createPageUrl("Quotes")}>
-          <Button variant="ghost" className="clay-button bg-white/60 text-slate-700 rounded-2xl">
+        <Link to={createPageUrl("Quotes")} className="self-start sm:self-auto">
+          <Button variant="ghost" size="sm" className="clay-button bg-white/60 text-slate-700 rounded-2xl text-xs sm:text-sm">
             View All
-            <ExternalLink className="w-4 h-4 ml-2" />
+            <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 ml-2" />
           </Button>
         </Link>
       </CardHeader>
@@ -67,21 +67,21 @@ export default function RecentQuotes({ quotes, isLoading }) {
               to={createPageUrl(`QuoteBuilder?id=${quote.id}`)}
               className="block"
             >
-              <div className="clay-inset bg-white/40 p-4 rounded-2xl hover:bg-white/60 transition-colors cursor-pointer">
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <p className="font-semibold text-slate-800">{quote.quotation_number}</p>
-                    <p className="text-sm text-slate-600">{quote.customer_name || quote.customer_data?.company_name}</p>
+              <div className="clay-inset bg-white/40 p-3 sm:p-4 rounded-2xl hover:bg-white/60 transition-colors cursor-pointer">
+                <div className="flex justify-between items-start mb-3 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-slate-800 truncate text-sm sm:text-base">{quote.quotation_number}</p>
+                    <p className="text-xs sm:text-sm text-slate-600 truncate">{quote.customer_name || quote.customer_data?.company_name}</p>
                   </div>
-                  <Badge className={`${getStatusColor(quote.status)} border-none rounded-full px-3 py-1`}>
+                  <Badge className={`${getStatusColor(quote.status)} border-none rounded-full px-2 sm:px-3 py-1 text-xs flex-shrink-0`}>
                     {quote.status}
                   </Badge>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-500">
+                <div className="flex justify-between items-center text-xs sm:text-sm gap-2">
+                  <span className="text-slate-500 truncate">
                     {format(new Date(quote.created_date), 'MMM d, yyyy')}
                   </span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-slate-800 flex-shrink-0 ml-2">
                     €{quote.total?.toLocaleString() || quote.total_amount?.toLocaleString()}
                   </span>
                 </div>

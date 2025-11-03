@@ -678,7 +678,7 @@ export default function QuoteBuilder() {
               Quotation Details
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="space-y-2">
               <Label className="text-slate-700 font-medium">Quote Number</Label>
               <div className="clay-inset bg-slate-100/60 p-3 rounded-2xl">
@@ -720,8 +720,8 @@ export default function QuoteBuilder() {
         </Card>
 
         {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="lg:col-span-2 space-y-4 sm:space-y-6">
             {/* Customer Selection */}
             <CustomerSelector
               customers={customers}

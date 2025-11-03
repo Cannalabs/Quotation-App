@@ -94,13 +94,13 @@ export default function TopProducts({ isLoading }) {
 
   return (
     <>
-      <Card className="clay-shadow bg-gradient-to-br from-white/80 to-slate-50/60 border-none rounded-3xl backdrop-blur-sm">
+      <Card className="clay-shadow bg-gradient-to-br from-white/80 to-slate-50/60 border-none rounded-3xl backdrop-blur-sm w-full min-w-0">
         <CardHeader className="pb-4">
-          <CardTitle className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
-              <Package className="w-5 h-5 text-green-700" />
+          <CardTitle className="text-xl sm:text-2xl font-bold text-slate-800 flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center flex-shrink-0">
+              <Package className="w-4 h-4 sm:w-5 sm:h-5 text-green-700" />
             </div>
-            Top Products
+            <span className="truncate">Top Products</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -127,32 +127,32 @@ export default function TopProducts({ isLoading }) {
               <p>No product data available</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="space-y-4">
               {topProducts.map((product, index) => (
                 <div 
                   key={product.name} 
-                  className="clay-inset bg-white/40 p-4 rounded-2xl hover:bg-white/60 transition-colors cursor-pointer mb-4 last:mb-0"
+                  className="clay-inset bg-white/40 p-3 sm:p-4 rounded-2xl hover:bg-white/60 transition-colors cursor-pointer"
                   onClick={() => handleProductClick(product)}
                 >
-                  <div className="flex justify-between items-center min-w-0">
-                    <div className="flex items-center gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-200 to-green-300 flex items-center justify-center text-green-700 font-bold text-sm flex-shrink-0">
+                  <div className="flex justify-between items-center gap-2 sm:gap-3 min-w-0">
+                    <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+                      <div className="w-6 h-6 sm:w-8 sm:h-8 rounded-full bg-gradient-to-br from-green-200 to-green-300 flex items-center justify-center text-green-700 font-bold text-xs sm:text-sm flex-shrink-0">
                         {index + 1}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-slate-800 whitespace-nowrap">
+                        <p className="font-semibold text-slate-800 truncate text-sm sm:text-base">
                           {product.name}
                         </p>
-                        <p className="text-sm text-slate-500 whitespace-nowrap">
+                        <p className="text-xs sm:text-sm text-slate-500 truncate">
                           {product.timesQuoted} quotes
                         </p>
                       </div>
                     </div>
-                    <div className="text-right flex-shrink-0 ml-4">
-                      <p className="font-semibold text-slate-800 whitespace-nowrap">
+                    <div className="text-right flex-shrink-0 ml-2">
+                      <p className="font-semibold text-slate-800 text-xs sm:text-sm">
                         €{product.totalValue.toLocaleString()}
                       </p>
-                      <p className="text-sm text-slate-500 whitespace-nowrap">
+                      <p className="text-xs sm:text-sm text-slate-500">
                         {product.totalQuantity} units
                       </p>
                     </div>

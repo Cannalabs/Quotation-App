@@ -382,16 +382,16 @@ export default function Products() {
   };
 
   return (
-    <div className="p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-4xl font-bold text-slate-800 mb-2">Product Catalog</h1>
-            <p className="text-slate-600 text-lg">Manage your product inventory and pricing</p>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-2">Product Catalog</h1>
+            <p className="text-slate-600 text-sm sm:text-base md:text-lg">Manage your product inventory and pricing</p>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full md:w-auto">
             <Button
               onClick={() => setShowUploader(!showUploader)}
               className="clay-button bg-gradient-to-r from-green-100 to-green-200 text-green-700 border-none rounded-2xl hover:from-green-200 hover:to-green-300"

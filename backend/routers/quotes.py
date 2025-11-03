@@ -229,6 +229,9 @@ async def update_quote(quote_id: int, payload: QuoteUpdate, session: AsyncSessio
             session.add(item)
         
         quote.subtotal, quote.total_vat, quote.total = _totals_for_items(built_items, quote.discount_type, quote.discount_value)
+    else:
+        # Recalculate totals even if items weren't updated (discount might have changed)
+        quote.subtotal, quote.total_vat, quote.total = _totals_for_items(quote.items, quote.discount_type, quote.discount_value)
 
     if not quote.quotation_number:
         year = datetime.utcnow().year

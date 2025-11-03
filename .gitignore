@@ -24,3 +24,37 @@ dist-ssr
 *.sw?
 
 .env
+.env.conf
+backend/.env.conf
+
+# Test files and generated documentation
+backend/tests
+backend/tests/*.xlsx
+backend/tests/*.csv
+backend/tests/*.sqlite
+backend/tests/test_db_inspect.sqlite
+backend/tests/test_db.sqlite
+backend/tests/__pycache__/
+backend/tests/.pytest_cache/
+backend/tests/htmlcov/
+backend/tests/.coverage
+backend/tests/coverage.xml
+backend/tests/*.pyc
+backend/tests/*.pyo
+backend/tests/*.pyd
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+.hypothesis/
+pytest.ini

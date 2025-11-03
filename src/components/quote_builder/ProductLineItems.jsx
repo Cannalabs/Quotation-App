@@ -35,7 +35,17 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
 
   const updateLineItem = (index, field, value) => {
     const updatedItems = [...lineItems];
-    updatedItems[index][field] = value;
+    // Ensure quantity is always a number >= 1
+    if (field === 'quantity') {
+      updatedItems[index][field] = (value === '' || value == null) ? 1 : Math.max(1, parseInt(value, 10) || 1);
+    }
+    // Ensure unit_price is always a number >= 0
+    else if (field === 'unit_price') {
+      updatedItems[index][field] = (value === '' || value == null || value === '.') ? 0 : Math.max(0, parseFloat(value) || 0);
+    }
+    else {
+      updatedItems[index][field] = value;
+    }
     setLineItems(updatedItems);
   };
 
@@ -50,7 +60,7 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
   );
 
   return (
-    <Card className="clay-shadow bg-gradient-to-br from-white/90 to-slate-50/70 border-none rounded-3xl backdrop-blur-sm">
+    <Card className="clay-shadow bg-gradient-to-br from-white/90 to-slate-50/70 border-none rounded-3xl backdrop-blur-sm w-full min-w-0">
       <CardHeader>
         <CardTitle className="text-2xl font-bold text-slate-800 flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-green-100 to-green-200 flex items-center justify-center">
@@ -60,81 +70,198 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
         </CardTitle>
       </CardHeader>
       
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-slate-200">
-                <TableHead className="text-slate-700 font-semibold" style={{ minWidth: '320px' }}>Product</TableHead>
-                <TableHead className="text-slate-700 font-semibold w-24">Quantity</TableHead>
-                <TableHead className="text-slate-700 font-semibold w-32">Unit Price</TableHead>
-                <TableHead className="text-slate-700 font-semibold w-32">Subtotal</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lineItems.map((item, index) => (
-                <TableRow key={`${item.id}-${index}`} className="border-slate-200">
-                  <TableCell className="font-medium text-slate-800">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="whitespace-nowrap overflow-hidden text-ellipsis max-w-[320px]">
-                            <p className="font-semibold">{item.name}</p>
-                            <p className="text-slate-600 text-sm">{item.sku}</p>
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <div>
-                            <p className="font-semibold">{item.name}</p>
-                            <p className="text-sm">{item.sku}</p>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min="1"
-                      value={item.quantity}
-                      onChange={(e) => updateLineItem(index, 'quantity', parseInt(e.target.value) || 1)}
-                      className="clay-inset bg-white/60 border-none rounded-xl h-10 text-center"
-                      disabled={disabled}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={item.unit_price}
-                      onChange={(e) => updateLineItem(index, 'unit_price', parseFloat(e.target.value) || 0)}
-                      className="clay-inset bg-white/60 border-none rounded-xl h-10"
-                      disabled={disabled}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-bold text-lg text-slate-800">
-                      €{(item.quantity * item.unit_price).toFixed(2)}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {!disabled && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeLineItem(index)}
-                        className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+      <CardContent className="w-full min-w-0 overflow-hidden">
+        {/* Mobile Card View */}
+        <div className="block md:hidden space-y-4">
+          {lineItems.map((item, index) => (
+            <div key={`${item.id}-${index}`} className="clay-shadow bg-white/60 rounded-2xl p-4 space-y-3">
+              <div className="flex justify-between items-start">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-800 truncate">{item.name}</p>
+                  <p className="text-sm text-slate-600">{item.sku}</p>
+                </div>
+                {!disabled && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeLineItem(index)}
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl flex-shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="text-xs text-slate-600 mb-1 block">Quantity</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={String(item.quantity ?? 1)}
+                    onChange={(e) => {
+                      const inputVal = e.target.value;
+                      const val = parseInt(inputVal, 10);
+                      if (inputVal === '') {
+                        const updatedItems = [...lineItems];
+                        updatedItems[index].quantity = '';
+                        setLineItems(updatedItems);
+                      } else if (!isNaN(val) && val >= 1) {
+                        updateLineItem(index, 'quantity', val);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      updateLineItem(index, 'quantity', isNaN(val) || val < 1 ? 1 : val);
+                    }}
+                    className="clay-inset bg-white/80 border-none rounded-xl h-10 text-center"
+                    disabled={disabled}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600 mb-1 block">Unit Price</label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={item.unit_price != null ? String(item.unit_price) : '0'}
+                    onChange={(e) => {
+                      const inputVal = e.target.value;
+                      if (inputVal === '' || inputVal === '.') {
+                        const updatedItems = [...lineItems];
+                        updatedItems[index].unit_price = inputVal;
+                        setLineItems(updatedItems);
+                      } else {
+                        const val = parseFloat(inputVal);
+                        if (!isNaN(val) && val >= 0) {
+                          updateLineItem(index, 'unit_price', val);
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const inputVal = e.target.value;
+                      if (inputVal === '' || inputVal === '.') {
+                        updateLineItem(index, 'unit_price', 0);
+                      } else {
+                        const val = parseFloat(inputVal);
+                        updateLineItem(index, 'unit_price', isNaN(val) || val < 0 ? 0 : val);
+                      }
+                    }}
+                    className="clay-inset bg-white/80 border-none rounded-xl h-10"
+                    disabled={disabled}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600 mb-1 block">Subtotal</label>
+                  <div className="font-bold text-lg text-slate-800 h-10 flex items-center">
+                    €{(item.quantity * item.unit_price).toFixed(2)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block w-full min-w-0">
+          <div className="w-full overflow-hidden">
+            <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '35%' }}>Product</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '18%' }}>Quantity</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '20%' }}>Unit Price</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '20%' }}>Subtotal</th>
+                  <th className="h-9 px-1 text-center align-middle font-semibold text-slate-700 text-xs" style={{ width: '7%' }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineItems.map((item, index) => (
+                  <tr key={`${item.id}-${index}`} className="border-b border-slate-200">
+                    <td className="p-2 align-middle font-medium text-slate-800 text-sm" style={{ width: '35%' }}>
+                      <div className="pr-2">
+                        <p className="font-semibold break-words leading-tight text-xs">{item.name}</p>
+                        <p className="text-slate-600 text-xs break-words leading-tight">{item.sku}</p>
+                      </div>
+                    </td>
+                    <td className="p-2 align-middle" style={{ width: '18%' }}>
+                      <Input
+                        type="number"
+                        min="1"
+                        value={String(item.quantity ?? 1)}
+                        onChange={(e) => {
+                          const inputVal = e.target.value;
+                          const val = parseInt(inputVal, 10);
+                          if (inputVal === '') {
+                            const updatedItems = [...lineItems];
+                            updatedItems[index].quantity = '';
+                            setLineItems(updatedItems);
+                          } else if (!isNaN(val) && val >= 1) {
+                            updateLineItem(index, 'quantity', val);
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          updateLineItem(index, 'quantity', isNaN(val) || val < 1 ? 1 : val);
+                        }}
+                        className="clay-inset bg-white/60 border-none rounded-xl h-9 text-center w-full text-sm"
+                        disabled={disabled}
+                      />
+                    </td>
+                    <td className="p-2 align-middle" style={{ width: '20%' }}>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={item.unit_price != null ? String(item.unit_price) : '0'}
+                        onChange={(e) => {
+                          const inputVal = e.target.value;
+                          // Allow empty or decimal point during typing
+                          if (inputVal === '' || inputVal === '.') {
+                            const updatedItems = [...lineItems];
+                            updatedItems[index].unit_price = inputVal;
+                            setLineItems(updatedItems);
+                          } else {
+                            const val = parseFloat(inputVal);
+                            if (!isNaN(val) && val >= 0) {
+                              updateLineItem(index, 'unit_price', val);
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const inputVal = e.target.value;
+                          if (inputVal === '' || inputVal === '.') {
+                            updateLineItem(index, 'unit_price', 0);
+                          } else {
+                            const val = parseFloat(inputVal);
+                            updateLineItem(index, 'unit_price', isNaN(val) || val < 0 ? 0 : val);
+                          }
+                        }}
+                        className="clay-inset bg-white/60 border-none rounded-xl h-9 w-full text-sm"
+                        disabled={disabled}
+                      />
+                    </td>
+                    <td className="p-2 align-middle" style={{ width: '20%' }}>
+                      <div className="font-bold text-sm text-slate-800 whitespace-nowrap">
+                        €{((item.quantity || 1) * (typeof item.unit_price === 'number' ? item.unit_price : parseFloat(item.unit_price) || 0)).toFixed(2)}
+                      </div>
+                    </td>
+                    <td className="p-1 align-middle text-center" style={{ width: '7%' }}>
+                      {!disabled && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeLineItem(index)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xl h-8 w-8"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {lineItems.length === 0 && (
@@ -146,7 +273,7 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
 
         {/* Add Product Button */}
         {!disabled && (
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <Popover open={showProductSelector} onOpenChange={setShowProductSelector}>
               <PopoverTrigger asChild>
                 <Button

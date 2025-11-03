@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import FaviconUpdater from "@/components/FaviconUpdater";
 import TitleUpdater from "@/components/TitleUpdater";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Sidebar,
   SidebarContent,
@@ -18,7 +19,8 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarProvider,
-  SidebarTrigger } from
+  SidebarTrigger,
+  useSidebar } from
 "@/components/ui/sidebar";
 
 const navigationItems = [
@@ -101,6 +103,36 @@ export default function Layout({ children, currentPageName }) {
     return colors[color] || colors.lavender;
   };
 
+  // Component to handle navigation with mobile/tablet sidebar close
+  function NavigationMenuItem({ item, isActive }) {
+    const { isMobile, isTablet, setOpenMobile } = useSidebar();
+
+    const handleClick = () => {
+      // Close mobile/tablet sidebar when a navigation item is clicked
+      if (isMobile || isTablet) {
+        setOpenMobile(false);
+      }
+    };
+
+    return (
+      <SidebarMenuItem>
+        <SidebarMenuButton asChild>
+          <Link
+            to={item.url}
+            onClick={handleClick}
+            className="bg-gradient-to-r text-left px-2 py-4 text-sm font-medium uppercase peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-8 clay-button hover:clay-button:hover active:clay-button:active gap-3 rounded-2xl transition-all duration-300 h-10 from-white/60 to-slate-50/60">
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${getIconBg(item.color, isActive)}`}>
+              <item.icon className={`w-5 h-5 ${isActive ? 'text-purple-700' : 'text-slate-600'}`} />
+            </div>
+            <span className="text-slate-700 font-medium">
+              {item.title}
+            </span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50">
       <FaviconUpdater />
@@ -145,7 +177,7 @@ export default function Layout({ children, currentPageName }) {
       </style>
       
       <SidebarProvider>
-        <div className="flex w-full">
+        <div className="flex w-full min-w-0 overflow-x-hidden">
           <Sidebar className="border-none clay-shadow bg-gradient-to-b from-white/80 to-slate-50/80 backdrop-blur-sm">
             <SidebarHeader className="p-6 flex flex-col gap-2 border-none">
               <div className="flex flex-col items-center text-center gap-4">
@@ -167,9 +199,18 @@ export default function Layout({ children, currentPageName }) {
                 <div className="mt-4 p-3 bg-white/60 rounded-lg clay-shadow">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center">
-                        <UserCircle className="w-5 h-5 text-blue-600" />
-                      </div>
+                      <Avatar className="w-10 h-10 border-2 border-blue-200">
+                        {user.profile_picture_url ? (
+                          <AvatarImage 
+                            src={user.profile_picture_url} 
+                            alt={user.full_name}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-600">
+                          <UserCircle className="w-5 h-5" />
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="text-left">
                         <p className="text-sm font-medium text-slate-700">{user.full_name}</p>
                         <p className="text-xs text-slate-500">{user.email}</p>
@@ -199,29 +240,8 @@ export default function Layout({ children, currentPageName }) {
                     {navigationItems.map((item) => {
                       const isActive = location.pathname === item.url;
                       return (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton asChild>
-                            <Link
-                              to={item.url} className="bg-gradient-to-r text-left px-2 py-4 text-sm font-medium uppercase peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground h-8 clay-button hover:clay-button:hover active:clay-button:active gap-3 rounded-2xl transition-all duration-300 h-10 from-white/60 to-slate-50/60">
-
-
-
-
-
-
-
-
-
-                              <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${getIconBg(item.color, isActive)}`}>
-                                <item.icon className={`w-5 h-5 ${isActive ? 'text-purple-700' : 'text-slate-600'}`} />
-                              </div>
-                              <span className="text-slate-700 font-medium">
-                                {item.title}
-                              </span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>);
-
+                        <NavigationMenuItem key={item.title} item={item} isActive={isActive} />
+                      );
                     })}
                   </SidebarMenu>
                 </SidebarGroupContent>
@@ -229,8 +249,8 @@ export default function Layout({ children, currentPageName }) {
             </SidebarContent>
           </Sidebar>
 
-          <main className="flex-1 flex flex-col">
-            <header className="bg-white/70 backdrop-blur-md clay-shadow px-6 py-4 md:hidden">
+          <main className="flex-1 flex flex-col min-w-0">
+            <header className="bg-white/70 backdrop-blur-md clay-shadow px-4 sm:px-6 py-4 md:flex xl:hidden">
               <div className="flex items-center gap-4">
                 <div className="clay-button bg-white/80 p-2 rounded-2xl">
                   <SidebarTrigger className="text-slate-700" />
@@ -239,7 +259,7 @@ export default function Layout({ children, currentPageName }) {
               </div>
             </header>
 
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto min-w-0">
               {children}
             </div>
           </main>

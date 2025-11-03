@@ -15,6 +15,8 @@ import {
   Building2,
   Loader2
 } from 'lucide-react';
+import { CompanySettings } from '@/api/entities';
+import { CONFIG } from '@/config/constants';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -27,12 +29,33 @@ export default function Login() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [companyLogo, setCompanyLogo] = useState(null);
+  const [companyName, setCompanyName] = useState(CONFIG.DEFAULT_COMPANY_NAME);
 
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/dashboard');
     }
   }, [isAuthenticated, navigate]);
+
+  // Load company logo from database
+  useEffect(() => {
+    const loadCompanyLogo = async () => {
+      try {
+        const settings = await CompanySettings.list();
+        if (settings.length > 0 && settings[0].logo_url) {
+          setCompanyLogo(settings[0].logo_url);
+        }
+        if (settings.length > 0 && settings[0].company_name) {
+          setCompanyName(settings[0].company_name);
+        }
+      } catch (error) {
+        console.warn('Failed to load company logo:', error);
+        // Keep default logo if loading fails
+      }
+    };
+    loadCompanyLogo();
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -74,20 +97,9 @@ export default function Login() {
     }
   };
 
-  const demoCredentials = [
-    { email: 'admin@example.com', password: 'admin123', role: 'Admin' },
-    { email: 'user@example.com', password: 'user123', role: 'User' },
-    { email: 'demo@example.com', password: 'demo123', role: 'Demo' }
-  ];
-
-  const fillDemoCredentials = (email, password) => {
-    setFormData({ email, password });
-    setError('');
-  };
-
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#e6f5f4' }}>
         <div className="flex items-center space-x-2">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span>Loading...</span>
@@ -97,20 +109,32 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#e6f5f4' }}>
       <div className="max-w-md w-full space-y-8">
         {/* Header */}
         <div className="text-center">
-          <div className="flex justify-center">
-            <div className="bg-white p-3 rounded-full shadow-lg">
-              <Building2 className="h-12 w-12 text-blue-600" />
-            </div>
+          <div className="flex justify-center mb-4">
+            {companyLogo ? (
+              <img
+                src={companyLogo}
+                alt="Company Logo"
+                className="h-24 w-auto object-contain max-w-xs"
+                onError={(e) => {
+                  // Fallback to icon if image fails to load
+                  setCompanyLogo(null);
+                }}
+              />
+            ) : (
+              <div className="flex items-center justify-center">
+                <Building2 className="h-12 w-12 text-blue-600" />
+              </div>
+            )}
           </div>
-          <h2 className="mt-6 text-3xl font-bold text-gray-900">
+          <h2 className="mt-6 text-2xl sm:text-3xl font-bold text-gray-900">
             Welcome Back
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            Sign in to your quotation management account
+          <p className="mt-2 text-xs sm:text-sm text-gray-600">
+            Sign in to {companyName}
           </p>
         </div>
 
@@ -180,8 +204,9 @@ export default function Login() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full"
+                className="w-full hover:opacity-90 transition-opacity"
                 disabled={isLoggingIn}
+                style={{ backgroundColor: '#006a65', color: 'white' }}
               >
                 {isLoggingIn ? (
                   <>
@@ -197,23 +222,6 @@ export default function Login() {
               </Button>
             </form>
 
-            {/* Demo Credentials */}
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <p className="text-sm text-gray-600 text-center mb-3">
-                Demo Credentials (click to fill):
-              </p>
-              <div className="space-y-2">
-                {demoCredentials.map((cred, index) => (
-                  <button
-                    key={index}
-                    onClick={() => fillDemoCredentials(cred.email, cred.password)}
-                    className="w-full text-left p-2 text-xs bg-gray-50 hover:bg-gray-100 rounded border border-gray-200 transition-colors"
-                  >
-                    <span className="font-medium">{cred.role}:</span> {cred.email} / {cred.password}
-                  </button>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
 

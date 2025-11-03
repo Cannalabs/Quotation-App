@@ -239,6 +239,8 @@ class QuoteUpdate(BaseModel):
     quotation_number: Optional[str] = None
     valid_until: Optional[datetime] = None
     terms_and_conditions: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: Optional[Decimal] = None
     items: Optional[List[QuoteItemIn]] = None
     
     # Archive fields

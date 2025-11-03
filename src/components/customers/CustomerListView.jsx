@@ -63,7 +63,8 @@ export default function CustomerListView({
 
   return (
     <div className="clay-shadow bg-white/60 border-none rounded-3xl overflow-hidden">
-      <Table>
+      <div className="overflow-x-auto">
+        <Table className="min-w-full">
         <TableHeader className="bg-slate-50/50 sticky top-0">
           <TableRow>
             <TableHead className="w-12">
@@ -152,6 +153,7 @@ export default function CustomerListView({
           ))}
         </TableBody>
       </Table>
+      </div>
       
       {customers.length === 0 && (
         <div className="text-center py-12">

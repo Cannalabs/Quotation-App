@@ -168,46 +168,83 @@ export const Country = {
 
 // User authentication and management
 const USER_KEY = "current_user";
-const defaultUser = { id: "user-1", full_name: "Demo User", email: "demo@example.com", role: "admin", profile_picture_url: "" };
 
 export const User = {
   async me() {
-    const u = JSON.parse(localStorage.getItem(USER_KEY) || "null") || defaultUser;
-    // Don't automatically save default user to localStorage
-    if (u.id !== defaultUser.id) {
-      localStorage.setItem(USER_KEY, JSON.stringify(u));
+    // Get user from localStorage
+    const localUser = JSON.parse(localStorage.getItem(USER_KEY) || "null");
+    
+    // If no local user, return null (not authenticated)
+    if (!localUser) {
+      return null;
     }
-    return u;
+    
+    // User ID must be a valid integer (database users only)
+    const userIdNum = parseInt(localUser.id, 10);
+    if (isNaN(userIdNum)) {
+      // Invalid user ID format - clear and return null
+      localStorage.removeItem(USER_KEY);
+      return null;
+    }
+    
+    // Fetch latest user data from database
+    try {
+      const dbUser = await apiGet(`/api/users/${userIdNum}`);
+      // Update localStorage with fresh data from database
+      const userData = {
+        id: dbUser.id.toString(),
+        full_name: dbUser.full_name,
+        email: dbUser.email,
+        role: dbUser.role,
+        profile_picture_url: dbUser.profile_picture_url || ''
+      };
+      localStorage.setItem(USER_KEY, JSON.stringify(userData));
+      return userData;
+    } catch (error) {
+      // If API fails (user might not exist anymore), clear localStorage
+      console.warn('Failed to fetch user from database, clearing session:', error);
+      localStorage.removeItem(USER_KEY);
+      return null;
+    }
   },
   async update(id, patch) {
-    const u = await this.me();
-    if (u.id !== id) return null;
-    const updated = { ...u, ...patch };
-    localStorage.setItem(USER_KEY, JSON.stringify(updated));
-    return updated;
+    try {
+      // Update in database via API
+      const updatedUser = await apiPut(`/api/users/${id}`, patch);
+      // Update localStorage with fresh data
+      const userData = {
+        id: updatedUser.id.toString(),
+        full_name: updatedUser.full_name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        profile_picture_url: updatedUser.profile_picture_url || ''
+      };
+      localStorage.setItem(USER_KEY, JSON.stringify(userData));
+      return userData;
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      throw error;
+    }
   },
   async updateMyUserData(patch) {
     const u = await this.me();
-    const updated = { ...u, ...patch };
-    localStorage.setItem(USER_KEY, JSON.stringify(updated));
-    return updated;
+    if (!u) {
+      throw new Error('User not authenticated');
+    }
+    
+    // User ID must be a valid integer (database users only)
+    const userIdNum = parseInt(u.id, 10);
+    if (isNaN(userIdNum)) {
+      throw new Error('Invalid user ID');
+    }
+    
+    // Update via API (database only)
+    return await this.update(userIdNum, patch);
   },
   async login(email, password) {
     // This is handled by the AuthContext, but keeping for compatibility
-    const validCredentials = [
-      { email: 'admin@example.com', password: 'admin123', user: { id: 'admin-1', full_name: 'Admin User', email: 'admin@example.com', role: 'admin', profile_picture_url: '' } },
-      { email: 'user@example.com', password: 'user123', user: { id: 'user-2', full_name: 'Regular User', email: 'user@example.com', role: 'user', profile_picture_url: '' } },
-      { email: 'demo@example.com', password: 'demo123', user: { id: 'demo-1', full_name: 'Demo User', email: 'demo@example.com', role: 'admin', profile_picture_url: '' } }
-    ];
-
-    const credential = validCredentials.find(c => c.email === email && c.password === password);
-    
-    if (credential) {
-      localStorage.setItem(USER_KEY, JSON.stringify(credential.user));
-      return { success: true, user: credential.user };
-    } else {
-      return { success: false, error: 'Invalid email or password' };
-    }
+    // All authentication is now done through the database API
+    return { success: false, error: 'Please use AuthContext.login() for authentication' };
   },
   async logout() {
     // Clear user data from localStorage completely
@@ -216,7 +253,10 @@ export const User = {
   },
   async isAuthenticated() {
     const user = JSON.parse(localStorage.getItem(USER_KEY) || "null");
-    return user && user.id !== defaultUser.id;
+    if (!user) return false;
+    // User ID must be a valid integer (database users only)
+    const userIdNum = parseInt(user.id, 10);
+    return !isNaN(userIdNum);
   },
   async list() {
     try {

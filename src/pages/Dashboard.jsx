@@ -109,15 +109,15 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="p-6 space-y-8 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
-      <div className="max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen overflow-x-hidden">
+      <div className="max-w-7xl mx-auto w-full">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
           <div>
-            <h1 className="text-4xl font-bold text-slate-800 mb-2">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-2">
               Sales Dashboard
             </h1>
-            <p className="text-slate-600 text-lg">
+            <p className="text-slate-600 text-sm sm:text-base md:text-lg">
               Welcome back! Here's your sales overview for {format(new Date(), 'MMMM yyyy')}
             </p>
           </div>
@@ -131,7 +131,7 @@ export default function Dashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
           <StatsCard
             title="Monthly Quotes"
             value={stats.monthlyQuotes}
@@ -174,9 +174,13 @@ export default function Dashboard() {
         <QuickActions />
 
         {/* Content Grid */}
-        <div className="grid lg:grid-cols-2 gap-8">
-          <RecentQuotes quotes={recentQuotes} isLoading={isLoading} />
-          <TopProducts isLoading={isLoading} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 lg:gap-8">
+          <div className="min-w-0">
+            <RecentQuotes quotes={recentQuotes} isLoading={isLoading} />
+          </div>
+          <div className="min-w-0">
+            <TopProducts isLoading={isLoading} />
+          </div>
         </div>
 
         {/* Modals/Overlays */}

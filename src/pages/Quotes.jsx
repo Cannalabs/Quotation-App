@@ -321,11 +321,11 @@ export default function Quotes() {
   };
 
   return (
-    <div className="p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         <div>
-          <h1 className="text-4xl font-bold text-slate-800 mb-2">Quote History</h1>
-          <p className="text-slate-600 text-lg">Review all past quotations</p>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-2">Quote History</h1>
+          <p className="text-slate-600 text-sm sm:text-base md:text-lg">Review all past quotations</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
