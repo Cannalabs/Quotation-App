@@ -159,3 +159,20 @@ class CompanySettings(Base):
     default_vat_rate: Mapped[Decimal] = mapped_column(Numeric(5, 2), default=4)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+# Email settings - stores SMTP configuration in database
+class EmailSettings(Base):
+    __tablename__ = "email_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    mail_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mail_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Store encrypted or plain (consider encryption in production)
+    mail_from: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mail_from_name: Mapped[str] = mapped_column(String(255), default="Grow United Italy")
+    mail_port: Mapped[int] = mapped_column(default=587)
+    mail_server: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    mail_tls: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    mail_ssl: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    mail_use_credentials: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

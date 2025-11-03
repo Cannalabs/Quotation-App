@@ -65,6 +65,45 @@ class CompanySettingsUpdate(BaseModel):
     bic_swift: Optional[str] = None
     default_vat_rate: Optional[Decimal] = None
 
+# Email Settings
+class EmailSettingsBase(BaseModel):
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None  # Password - only for updates, not returned in reads
+    mail_from: Optional[str] = None
+    mail_from_name: str = "Grow United Italy"
+    mail_port: int = 587
+    mail_server: Optional[str] = None
+    mail_tls: bool = True
+    mail_ssl: bool = False
+    mail_use_credentials: bool = True
+
+class EmailSettingsRead(BaseModel):
+    """Email settings read model - password is excluded for security"""
+    id: int
+    mail_username: Optional[str] = None
+    # mail_password is EXCLUDED - never send password in API responses
+    mail_from: Optional[str] = None
+    mail_from_name: str = "Grow United Italy"
+    mail_port: int = 587
+    mail_server: Optional[str] = None
+    mail_tls: bool = True
+    mail_ssl: bool = False
+    mail_use_credentials: bool = True
+    created_at: datetime
+    updated_at: datetime
+    model_config = ConfigDict(from_attributes=True)
+
+class EmailSettingsUpdate(BaseModel):
+    mail_username: Optional[str] = None
+    mail_password: Optional[str] = None
+    mail_from: Optional[str] = None
+    mail_from_name: Optional[str] = None
+    mail_port: Optional[int] = None
+    mail_server: Optional[str] = None
+    mail_tls: Optional[bool] = None
+    mail_ssl: Optional[bool] = None
+    mail_use_credentials: Optional[bool] = None
+
 # Customers
 class CustomerBase(BaseModel):
     name: str

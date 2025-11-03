@@ -10,6 +10,10 @@ from routers import quotes as quotes_router
 from routers import users as users_router
 from routers import countries as countries_router
 from routers import email as email_router
+from email_service import email_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Local Test API", version="0.1.0")
 
@@ -32,8 +36,20 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup():
+    # Create database tables first
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    
+    # Then reload email settings from database after database is ready
+    # This ensures email service uses database settings instead of .env.conf
+    try:
+        await email_service.reinitialize_async()
+        if email_service.is_configured:
+            logger.info("Email service loaded from database on server startup")
+        else:
+            logger.info("Email service not configured - no settings found in database")
+    except Exception as e:
+        logger.warning(f"Could not load email settings from database on startup: {e}. Email service may use .env.conf fallback.")
 
 # Root-level test routes
 @app.get("/")

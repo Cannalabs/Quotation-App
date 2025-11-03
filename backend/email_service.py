@@ -21,33 +21,101 @@ class EmailService:
     def __init__(self):
         self._initialize_email_service()
     
-    def _initialize_email_service(self):
-        # Only initialize if email is configured
+    def _get_email_config(self):
+        """
+        Get email configuration from database first, fallback to config file.
+        This is a synchronous method that tries to load from database if possible.
+        """
+        try:
+            # Try to load from database using async context
+            import asyncio
+            from sqlalchemy import select
+            from db import AsyncSessionLocal
+            from models import EmailSettings
+            
+            async def _load_from_db():
+                async with AsyncSessionLocal() as session:
+                    result = await session.execute(select(EmailSettings).limit(1))
+                    email_settings = result.scalars().first()
+                    if email_settings and email_settings.mail_from and email_settings.mail_server:
+                        return {
+                            'mail_username': email_settings.mail_username,
+                            'mail_password': email_settings.mail_password,
+                            'mail_from': email_settings.mail_from,
+                            'mail_from_name': email_settings.mail_from_name,
+                            'mail_port': email_settings.mail_port,
+                            'mail_server': email_settings.mail_server,
+                            'mail_tls': email_settings.mail_tls,
+                            'mail_ssl': email_settings.mail_ssl,
+                            'mail_use_credentials': email_settings.mail_use_credentials
+                        }
+                    return None
+            
+            # Try to get existing event loop or create new one
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is running, we can't use it synchronously
+                    # Fallback to config file
+                    logger.info("Event loop is running, loading email config from file")
+                    return None
+            except RuntimeError:
+                # No event loop, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            db_config = loop.run_until_complete(_load_from_db())
+            if db_config:
+                logger.info("Loaded email configuration from database")
+                return db_config
+        except Exception as e:
+            logger.warning(f"Could not load email config from database: {e}, falling back to config file")
+        
+        # Fallback to config file
         if settings.mail_from and settings.mail_server:
+            logger.info("Loading email configuration from config file")
+            return {
+                'mail_username': settings.mail_username,
+                'mail_password': settings.mail_password,
+                'mail_from': settings.mail_from,
+                'mail_from_name': settings.mail_from_name,
+                'mail_port': settings.mail_port,
+                'mail_server': settings.mail_server,
+                'mail_tls': settings.mail_tls,
+                'mail_ssl': settings.mail_ssl,
+                'mail_use_credentials': settings.mail_use_credentials
+            }
+        
+        return None
+    
+    def _initialize_email_service(self):
+        email_config = self._get_email_config()
+        
+        if email_config and email_config.get('mail_from') and email_config.get('mail_server'):
             # Fix common SMTP server typos
-            mail_server = settings.mail_server.lower().strip()
+            mail_server = email_config['mail_server'].lower().strip()
             if 'smpt.gmail.com' in mail_server:
                 mail_server = 'smtp.gmail.com'
-                logger.warning(f"Fixed SMTP server typo: {settings.mail_server} -> {mail_server}")
+                logger.warning(f"Fixed SMTP server typo: {email_config['mail_server']} -> {mail_server}")
             elif 'smpt.' in mail_server:
                 mail_server = mail_server.replace('smpt.', 'smtp.')
-                logger.warning(f"Fixed SMTP server typo: {settings.mail_server} -> {mail_server}")
+                logger.warning(f"Fixed SMTP server typo: {email_config['mail_server']} -> {mail_server}")
             
             # Debug logging
             logger.info(f"Initializing email service with server: {mail_server}")
-            logger.info(f"Email from: {settings.mail_from}")
-            logger.info(f"Port: {settings.mail_port}")
+            logger.info(f"Email from: {email_config['mail_from']}")
+            logger.info(f"Port: {email_config['mail_port']}")
             
             self.config = ConnectionConfig(
-                MAIL_USERNAME=settings.mail_username,
-                MAIL_PASSWORD=settings.mail_password,
-                MAIL_FROM=settings.mail_from,
-                MAIL_FROM_NAME=settings.mail_from_name,
-                MAIL_PORT=settings.mail_port,
+                MAIL_USERNAME=email_config['mail_username'],
+                MAIL_PASSWORD=email_config['mail_password'],
+                MAIL_FROM=email_config['mail_from'],
+                MAIL_FROM_NAME=email_config['mail_from_name'],
+                MAIL_PORT=email_config['mail_port'],
                 MAIL_SERVER=mail_server,
-                MAIL_STARTTLS=settings.mail_tls,
-                MAIL_SSL_TLS=settings.mail_ssl,
-                USE_CREDENTIALS=settings.mail_use_credentials,
+                MAIL_STARTTLS=email_config['mail_tls'],
+                MAIL_SSL_TLS=email_config['mail_ssl'],
+                USE_CREDENTIALS=email_config['mail_use_credentials'],
                 VALIDATE_CERTS=True
             )
             self.fastmail = FastMail(self.config)
@@ -59,8 +127,71 @@ class EmailService:
             self.is_configured = False
     
     def reinitialize(self):
-        """Reinitialize the email service with current settings"""
+        """Reinitialize the email service with current settings (synchronous)"""
         self._initialize_email_service()
+    
+    async def reinitialize_async(self):
+        """Reinitialize the email service with current settings from database (async)"""
+        try:
+            from sqlalchemy import select
+            from db import AsyncSessionLocal
+            from models import EmailSettings
+            
+            async with AsyncSessionLocal() as session:
+                result = await session.execute(select(EmailSettings).limit(1))
+                email_settings = result.scalars().first()
+                if email_settings and email_settings.mail_from and email_settings.mail_server:
+                    email_config = {
+                        'mail_username': email_settings.mail_username,
+                        'mail_password': email_settings.mail_password,
+                        'mail_from': email_settings.mail_from,
+                        'mail_from_name': email_settings.mail_from_name,
+                        'mail_port': email_settings.mail_port,
+                        'mail_server': email_settings.mail_server,
+                        'mail_tls': email_settings.mail_tls,
+                        'mail_ssl': email_settings.mail_ssl,
+                        'mail_use_credentials': email_settings.mail_use_credentials
+                    }
+                    
+                    # Verify all required fields are present
+                    if not email_config.get('mail_username') or not email_config.get('mail_password'):
+                        logger.warning("Email settings missing username or password, email service will not be fully configured")
+                    
+                    # Fix common SMTP server typos
+                    mail_server = email_config['mail_server'].lower().strip()
+                    if 'smpt.gmail.com' in mail_server:
+                        mail_server = 'smtp.gmail.com'
+                        logger.warning(f"Fixed SMTP server typo: {email_config['mail_server']} -> {mail_server}")
+                    elif 'smpt.' in mail_server:
+                        mail_server = mail_server.replace('smpt.', 'smtp.')
+                        logger.warning(f"Fixed SMTP server typo: {email_config['mail_server']} -> {mail_server}")
+                    
+                    logger.info(f"Reinitializing email service with server: {mail_server}, from: {email_config['mail_from']}")
+                    
+                    self.config = ConnectionConfig(
+                        MAIL_USERNAME=email_config['mail_username'],
+                        MAIL_PASSWORD=email_config['mail_password'],
+                        MAIL_FROM=email_config['mail_from'],
+                        MAIL_FROM_NAME=email_config['mail_from_name'],
+                        MAIL_PORT=email_config['mail_port'],
+                        MAIL_SERVER=mail_server,
+                        MAIL_STARTTLS=email_config['mail_tls'],
+                        MAIL_SSL_TLS=email_config['mail_ssl'],
+                        USE_CREDENTIALS=email_config['mail_use_credentials'],
+                        VALIDATE_CERTS=True
+                    )
+                    self.fastmail = FastMail(self.config)
+                    self.is_configured = True
+                    logger.info(f"Email service successfully reinitialized - configured: {self.is_configured}, server: {mail_server}")
+                    return
+                else:
+                    logger.warning(f"Email settings not found or incomplete in database - mail_from: {email_settings.mail_from if email_settings else None}, mail_server: {email_settings.mail_server if email_settings else None}")
+        except Exception as e:
+            logger.error(f"Could not reinitialize from database: {e}", exc_info=True)
+        
+        # Fallback to synchronous reinitialize
+        logger.info("Falling back to synchronous reinitialize")
+        self.reinitialize()
 
     async def send_quotation_email(
         self,

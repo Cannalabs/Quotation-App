@@ -56,21 +56,53 @@ export default function CompanySettingsPage() {
   });
   const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState("");
+  const [hasExistingPassword, setHasExistingPassword] = useState(false); // Track if password exists in DB
 
   useEffect(() => {
+    // Security: Remove any old email config from localStorage if it exists
+    // Passwords should never be stored in browser storage
+    try {
+      if (localStorage.getItem('emailConfig')) {
+        localStorage.removeItem('emailConfig');
+      }
+    } catch (e) {
+      // Ignore if localStorage is not available
+    }
+    
     loadCompanySettings();
     loadEmailSettings();
   }, []);
 
-  const loadEmailSettings = () => {
+  const loadEmailSettings = async () => {
     try {
-      const savedConfig = localStorage.getItem('emailConfig');
-      if (savedConfig) {
-        const parsedConfig = JSON.parse(savedConfig);
-        setEmailConfig(prev => ({ ...prev, ...parsedConfig }));
+      // Load from database only - no localStorage for security (passwords should never be stored locally)
+      const { getEmailConfig } = await import('@/api/integrations');
+      const dbConfig = await getEmailConfig();
+      if (dbConfig) {
+        // Check if password exists in database (if all other required fields are set, password likely exists)
+        const hasPassword = dbConfig.mail_server && dbConfig.mail_username && dbConfig.mail_from;
+        setHasExistingPassword(hasPassword || false);
+        
+        // Load from database and update state
+        // Only update fields that exist in the response (don't overwrite with empty if not provided)
+        setEmailConfig(prev => ({
+          mail_username: dbConfig.mail_username !== undefined ? (dbConfig.mail_username || "") : prev.mail_username,
+          mail_password: "", // Security: Password never sent from backend API, user must enter if changing
+          mail_from: dbConfig.mail_from !== undefined ? (dbConfig.mail_from || "") : prev.mail_from,
+          mail_from_name: dbConfig.mail_from_name !== undefined ? dbConfig.mail_from_name : prev.mail_from_name,
+          mail_port: dbConfig.mail_port !== undefined ? dbConfig.mail_port : prev.mail_port,
+          mail_server: dbConfig.mail_server !== undefined ? (dbConfig.mail_server || "") : prev.mail_server,
+          mail_tls: dbConfig.mail_tls !== undefined ? dbConfig.mail_tls : prev.mail_tls,
+          mail_ssl: dbConfig.mail_ssl !== undefined ? dbConfig.mail_ssl : prev.mail_ssl,
+          mail_use_credentials: dbConfig.mail_use_credentials !== undefined ? dbConfig.mail_use_credentials : prev.mail_use_credentials
+        }));
+      } else {
+        setHasExistingPassword(false);
       }
     } catch (error) {
-      console.error('Error loading email settings:', error);
+      console.error('Error loading email settings from database:', error);
+      // Don't fallback to localStorage - security risk for passwords
+      // Just leave form as is if database load fails
     }
   };
 
@@ -261,20 +293,60 @@ export default function CompanySettingsPage() {
   };
 
   const handleSaveEmailSettings = async () => {
+    // Frontend validation - check required fields before sending to backend
+    const missingFields = [];
+    if (!emailConfig.mail_server || !emailConfig.mail_server.trim()) {
+      missingFields.push("SMTP Server");
+    }
+    if (!emailConfig.mail_username || !emailConfig.mail_username.trim()) {
+      missingFields.push("Username/Email");
+    }
+    // Password required only if no existing password in database (first time setup)
+    if (!hasExistingPassword && (!emailConfig.mail_password || !emailConfig.mail_password.trim())) {
+      missingFields.push("Password/App Password");
+    }
+    if (!emailConfig.mail_from || !emailConfig.mail_from.trim()) {
+      missingFields.push("From Email");
+    }
+    
+    if (missingFields.length > 0) {
+      setMessage({ 
+        type: "error", 
+        text: `Please fill in all required fields: ${missingFields.join(", ")}` 
+      });
+      setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+      return;
+    }
+    
     setIsSaving(true);
     try {
       const { saveEmailConfig } = await import('@/api/integrations');
-      await saveEmailConfig(emailConfig);
+      const response = await saveEmailConfig(emailConfig);
       
-      setMessage({ 
-        type: "success", 
-        text: "Email settings saved successfully! You can now test the email functionality." 
-      });
-      
-      // Store in localStorage for persistence during session
-      localStorage.setItem('emailConfig', JSON.stringify(emailConfig));
-      
-      setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+      if (response.success) {
+        setMessage({ 
+          type: "success", 
+          text: response.message || "Email settings saved successfully to database! You can now test the email functionality." 
+        });
+        
+        // Update form with saved values from response (if provided)
+        if (response.config) {
+          setEmailConfig(prev => ({
+            ...prev,
+            ...response.config,
+            mail_password: "" // Always keep password field empty for security
+          }));
+          // Update hasExistingPassword flag after successful save
+          setHasExistingPassword(true);
+        } else {
+          // Reload email settings from database to ensure form shows saved values
+          await loadEmailSettings();
+        }
+        
+        setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+      } else {
+        throw new Error(response.message || "Failed to save email settings");
+      }
     } catch (error) {
       setMessage({ 
         type: "error", 
@@ -741,13 +813,14 @@ export default function CompanySettingsPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <Label className="text-slate-700 font-medium">SMTP Server</Label>
+                    <Label className="text-slate-700 font-medium">SMTP Server <span className="text-red-500">*</span></Label>
                     <Input
                       type="text"
                       value={emailConfig.mail_server}
                       onChange={(e) => handleEmailConfigChange("mail_server", e.target.value)}
                       className="clay-inset bg-white/60 border-none rounded-2xl h-12"
                       placeholder="smtp.gmail.com"
+                      required
                     />
                   </div>
 
@@ -763,7 +836,7 @@ export default function CompanySettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-slate-700 font-medium">Username/Email</Label>
+                    <Label className="text-slate-700 font-medium">Username/Email <span className="text-red-500">*</span></Label>
                     <Input
                       type="email"
                       value={emailConfig.mail_username}
@@ -774,18 +847,22 @@ export default function CompanySettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-slate-700 font-medium">Password/App Password</Label>
+                    <Label className="text-slate-700 font-medium">
+                      Password/App Password {!hasExistingPassword && <span className="text-red-500">*</span>}
+                      {hasExistingPassword && <span className="text-xs text-slate-500 font-normal">(Leave empty to keep existing)</span>}
+                    </Label>
                     <Input
                       type="password"
                       value={emailConfig.mail_password}
                       onChange={(e) => handleEmailConfigChange("mail_password", e.target.value)}
                       className="clay-inset bg-white/60 border-none rounded-2xl h-12"
-                      placeholder="Your app password"
+                      placeholder={hasExistingPassword ? "Enter new password or leave empty" : "Your app password"}
+                      required={!hasExistingPassword}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-slate-700 font-medium">From Email</Label>
+                    <Label className="text-slate-700 font-medium">From Email <span className="text-red-500">*</span></Label>
                     <Input
                       type="email"
                       value={emailConfig.mail_from}

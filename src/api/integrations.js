@@ -73,6 +73,10 @@ export async function getEmailConfigStatus() {
   return apiGet("/api/email/config-status");
 }
 
+export async function getEmailConfig() {
+  return apiGet("/api/email/config");
+}
+
 export async function saveEmailConfig(emailConfig) {
   return apiPost("/api/email/save-config", emailConfig);
 }
