@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{title}}</title>
+    <script>
+        // Frontend URL from backend template variable
+        const frontendUrl = '{{frontend_url}}' || window.location.origin.replace(':8000', ':5173');
+        
+        function goToLogin() {
+            window.location.href = frontendUrl + '/login';
+        }
+        
+        function goToHome() {
+            window.location.href = frontendUrl + '/';
+        }
+    </script>
+</head>
+<body>
+    <h1>{{status_code}} - {{title}}</h1>
+    <p>{{message}}</p>
+    {% if detail %}
+    <p><strong>Details:</strong> {{detail}}</p>
+    {% endif %}
+    <hr>
+    <p><a href="#" onclick="goToLogin(); return false;">Go to Login</a> | <a href="#" onclick="goToHome(); return false;">Go to Home</a></p>
+</body>
+</html>
+
