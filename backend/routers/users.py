@@ -4,12 +4,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
+import logging
 
 from db import get_session
 from models import User
 from schemas import UserCreate, UserUpdate, UserRead, UserPasswordUpdate, AdminPasswordReset, ForgotPasswordRequest, hash_password, verify_password
 from auth import require_admin_role, create_access_token, get_current_user
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["users"])
 
 async def _commit_and_refresh(session: AsyncSession, obj):
@@ -242,8 +244,17 @@ async def verify_login(
     result = await session.execute(stmt)
     user = result.scalar_one_or_none()
     
-    if not user or not verify_password(login_data.password, user.password_hash):
-        # Return 401 without logging - this is expected behavior for invalid credentials
+    # Check if user exists
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Check if user has a password_hash set
+    if not user.password_hash:
+        logger.warning(f"Login attempt for user {user.email} but password_hash is not set")
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Verify password
+    if not verify_password(login_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Create JWT access token
