@@ -156,6 +156,10 @@ export const CompanySettings = {
     const settings = await apiGet(`/api/company-settings`);
     return [settings]; // Wrap in array to match list() expectation
   },
+  async getPublic() { 
+    // Public endpoint - no authentication required, only returns name and logo
+    return apiGet(`/api/company-settings/public`); 
+  },
   async update(patch) { return apiPut(`/api/company-settings`, patch); },
   async create(patch) { return apiPost(`/api/company-settings`, patch); },
 };
@@ -247,8 +251,9 @@ export const User = {
     return { success: false, error: 'Please use AuthContext.login() for authentication' };
   },
   async logout() {
-    // Clear user data from localStorage completely
+    // Clear user data and token from localStorage completely
     localStorage.removeItem(USER_KEY);
+    localStorage.removeItem('access_token');
     return { success: true };
   },
   async isAuthenticated() {
@@ -310,6 +315,29 @@ export const User = {
     } catch (error) {
       console.error("Failed to restore user:", error);
       return { success: false, error: error.message || "Failed to restore user" };
+    }
+  },
+  async forgotPassword(email) {
+    try {
+      const response = await apiPost("/api/users/forgot-password", { email });
+      return { success: true, message: response.message };
+    } catch (error) {
+      console.error("Failed to process forgot password request:", error);
+      return { 
+        success: true, // Still return success to prevent email enumeration
+        message: "Please contact your administrator to reset your password."
+      };
+    }
+  },
+  async adminResetPassword(userId, newPassword) {
+    try {
+      const response = await apiPost(`/api/users/${userId}/reset-password`, { 
+        new_password: newPassword 
+      });
+      return { success: true, message: response.message };
+    } catch (error) {
+      console.error("Failed to reset password:", error);
+      return { success: false, error: error.message || "Failed to reset password" };
     }
   },
 };

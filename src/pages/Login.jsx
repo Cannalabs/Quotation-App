@@ -13,10 +13,17 @@ import {
   Eye, 
   EyeOff,
   Building2,
-  Loader2
+  Loader2,
+  HelpCircle
 } from 'lucide-react';
 import { CompanySettings } from '@/api/entities';
 import { CONFIG } from '@/config/constants';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -31,6 +38,7 @@ export default function Login() {
   const [success, setSuccess] = useState('');
   const [companyLogo, setCompanyLogo] = useState(null);
   const [companyName, setCompanyName] = useState(CONFIG.DEFAULT_COMPANY_NAME);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -38,16 +46,16 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate]);
 
-  // Load company logo from database
+  // Load company logo from database (public endpoint - no auth required)
   useEffect(() => {
     const loadCompanyLogo = async () => {
       try {
-        const settings = await CompanySettings.list();
-        if (settings.length > 0 && settings[0].logo_url) {
-          setCompanyLogo(settings[0].logo_url);
+        const publicInfo = await CompanySettings.getPublic();
+        if (publicInfo.logo_url) {
+          setCompanyLogo(publicInfo.logo_url);
         }
-        if (settings.length > 0 && settings[0].company_name) {
-          setCompanyName(settings[0].company_name);
+        if (publicInfo.company_name) {
+          setCompanyName(publicInfo.company_name);
         }
       } catch (error) {
         console.warn('Failed to load company logo:', error);
@@ -96,6 +104,7 @@ export default function Login() {
       setIsLoggingIn(false);
     }
   };
+
 
   if (isLoading) {
     return (
@@ -186,6 +195,17 @@ export default function Login() {
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
+
+              {/* Forgot Password Link */}
+              <div className="text-right">
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  Forgot your password?
+                </button>
+              </div>
               </div>
 
               {/* Error/Success Messages */}
@@ -231,6 +251,39 @@ export default function Login() {
           <p className="mt-1">Secure • Reliable • Professional</p>
         </div>
       </div>
+
+      {/* Forgot Password Dialog */}
+      <Dialog open={showForgotPassword} onOpenChange={setShowForgotPassword}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <HelpCircle className="w-5 h-5 text-blue-600" />
+              Forgot Password
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-gradient-to-br from-blue-100 to-blue-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                <HelpCircle className="w-8 h-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Forgot Your Password?</h3>
+              <p className="text-gray-600 mb-4">
+                Please contact your administrator to reset your password.
+              </p>
+            </div>
+
+            <div className="flex justify-center">
+              <Button
+                onClick={() => setShowForgotPassword(false)}
+                style={{ backgroundColor: '#006a65', color: 'white' }}
+                className="px-6"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

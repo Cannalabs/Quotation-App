@@ -20,7 +20,9 @@ import {
   X,
   AlertCircle,
   UserMinus,
-  UserPlus
+  UserPlus,
+  KeyRound,
+  Loader2
 } from 'lucide-react';
 import {
   Dialog,
@@ -60,6 +62,11 @@ export default function UserManagement() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isResetPasswordDialogOpen, setIsResetPasswordDialogOpen] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [newUser, setNewUser] = useState({
@@ -191,6 +198,50 @@ export default function UserManagement() {
       } catch (error) {
         setMessage({ type: 'error', text: 'Failed to restore user' });
       }
+    }
+  };
+
+  const handleResetPassword = (user) => {
+    setResetPasswordUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setIsResetPasswordDialogOpen(true);
+  };
+
+  const handleAdminResetPassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      setMessage({ type: 'error', text: 'Please fill in both password fields' });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setMessage({ type: 'error', text: 'Password must be at least 6 characters long' });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setMessage({ type: 'error', text: 'Passwords do not match' });
+      return;
+    }
+
+    setIsResettingPassword(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const result = await User.adminResetPassword(resetPasswordUser.id, newPassword);
+      if (result.success) {
+        setMessage({ type: 'success', text: result.message || 'Password reset successfully!' });
+        setIsResetPasswordDialogOpen(false);
+        setResetPasswordUser(null);
+        setNewPassword('');
+        setConfirmPassword('');
+      } else {
+        setMessage({ type: 'error', text: result.error || 'Failed to reset password' });
+      }
+    } catch (error) {
+      setMessage({ type: 'error', text: 'Failed to reset password' });
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -468,14 +519,25 @@ export default function UserManagement() {
                         size="sm"
                         onClick={() => handleEditUser(user)}
                         className="h-8 w-8 p-0 clay-button rounded-xl hover:bg-blue-100 hover:text-blue-700"
+                        title="Edit User"
                       >
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
+                        onClick={() => handleResetPassword(user)}
+                        className="h-8 w-8 p-0 clay-button rounded-xl text-orange-600 hover:text-orange-700 hover:bg-orange-100"
+                        title="Reset Password"
+                      >
+                        <KeyRound className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleDeleteUser(user.id)}
                         className="h-8 w-8 p-0 clay-button rounded-xl text-red-600 hover:text-red-700 hover:bg-red-100"
+                        title="Delete User"
                       >
                         <Trash2 className="w-4 h-4" />
                       </Button>
@@ -628,6 +690,96 @@ export default function UserManagement() {
                   className="clay-button bg-gradient-to-r from-blue-200 to-blue-300 text-blue-800 border-none rounded-2xl px-6 py-3 font-semibold hover:from-blue-300 hover:to-blue-400"
                 >
                   Update User
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={isResetPasswordDialogOpen} onOpenChange={setIsResetPasswordDialogOpen}>
+        <DialogContent className="clay-shadow border-none rounded-3xl bg-gradient-to-br from-white/90 to-slate-50/70 backdrop-blur-sm">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
+                <KeyRound className="w-4 h-4 text-orange-700" />
+              </div>
+              Reset Password
+            </DialogTitle>
+          </DialogHeader>
+          {resetPasswordUser && (
+            <div className="space-y-6">
+              <div className="p-4 clay-inset bg-orange-50/50 rounded-2xl">
+                <p className="text-sm text-slate-700">
+                  <span className="font-semibold">User:</span> {resetPasswordUser.full_name} ({resetPasswordUser.email})
+                </p>
+                <p className="text-xs text-slate-500 mt-1">You are resetting the password for this user. They will need to use the new password to log in.</p>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-slate-700 font-medium">New Password</Label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 characters)"
+                  className="clay-inset bg-white/60 border-none rounded-2xl h-12"
+                  disabled={isResettingPassword}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-slate-700 font-medium">Confirm Password</Label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                  className="clay-inset bg-white/60 border-none rounded-2xl h-12"
+                  disabled={isResettingPassword}
+                />
+              </div>
+
+              {message.text && (
+                <Alert variant={message.type === 'error' ? 'destructive' : 'default'} className={message.type === 'success' ? 'border-green-200 bg-green-50' : ''}>
+                  <AlertDescription className={message.type === 'success' ? 'text-green-800' : ''}>
+                    {message.text}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="flex justify-end gap-3 pt-4">
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsResetPasswordDialogOpen(false);
+                    setResetPasswordUser(null);
+                    setNewPassword('');
+                    setConfirmPassword('');
+                    setMessage({ type: '', text: '' });
+                  }}
+                  className="clay-button bg-white/60 text-slate-700 border-none rounded-2xl px-6 py-3"
+                  disabled={isResettingPassword}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleAdminResetPassword}
+                  disabled={isResettingPassword}
+                  className="clay-button bg-gradient-to-r from-orange-200 to-orange-300 text-orange-800 border-none rounded-2xl px-6 py-3 font-semibold hover:from-orange-300 hover:to-orange-400"
+                >
+                  {isResettingPassword ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4 mr-2" />
+                      Reset Password
+                    </>
+                  )}
                 </Button>
               </div>
             </div>
