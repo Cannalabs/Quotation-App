@@ -32,7 +32,7 @@ export default function ProductListView({
         <Table>
           <TableHeader>
             <TableRow>
-              {Array(8).fill(0).map((_, i) => (
+              {Array(9).fill(0).map((_, i) => (
                 <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>
               ))}
             </TableRow>
@@ -40,7 +40,7 @@ export default function ProductListView({
           <TableBody>
             {Array(5).fill(0).map((_, i) => (
               <TableRow key={i}>
-                {Array(8).fill(0).map((_, j) => (
+                {Array(9).fill(0).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
                 ))}
               </TableRow>
@@ -78,6 +78,7 @@ export default function ProductListView({
             <SortableHeader field="category">Category</SortableHeader>
             <SortableHeader field="unit_price">Price</SortableHeader>
             <TableHead>Status</TableHead>
+            <TableHead>Created By</TableHead>
             <TableHead className="w-32">Actions</TableHead>
           </TableRow>
         </TableHeader>
@@ -123,6 +124,9 @@ export default function ProductListView({
                 >
                   {showArchived ? "Archived" : showDeleted ? "Deleted" : (product.is_active !== false ? "Active" : "Inactive")}
                 </Badge>
+              </TableCell>
+              <TableCell className="text-slate-600 text-sm">
+                {product.created_by_name || 'N/A'}
               </TableCell>
               <TableCell>
                 <div className="flex gap-2">

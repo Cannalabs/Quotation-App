@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     mail_ssl: bool = False
     mail_use_credentials: bool = True
 
+    # JWT Authentication configuration
+    jwt_secret_key: str = ""  # Should be set via environment variable
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30 * 24 * 60  # 30 days in minutes
+
     # Load env from backend/.env.conf regardless of working dir
     model_config = SettingsConfigDict(
         env_file=str((Path(__file__).resolve().parent / ".env.conf")),

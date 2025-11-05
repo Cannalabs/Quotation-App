@@ -27,6 +27,7 @@ class Customer(Base):
 
     archived: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     quotes: Mapped[List["Quote"]] = relationship(back_populates="customer", lazy="selectin")
 
@@ -51,6 +52,7 @@ class Product(Base):
     deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     items: Mapped[List["QuoteItem"]] = relationship(back_populates="product", lazy="selectin")
 
@@ -84,6 +86,7 @@ class Quote(Base):
     
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     customer: Mapped["Customer"] = relationship(back_populates="quotes", lazy="selectin")
     items: Mapped[List["QuoteItem"]] = relationship(back_populates="quote", cascade="all, delete-orphan", lazy="selectin")

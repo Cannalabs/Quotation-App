@@ -109,6 +109,12 @@ export default function CustomerList({
                     <span>{customer.country}</span>
                   </div>
                 )}
+                {customer.created_by_name && (
+                  <div className="flex items-center gap-3">
+                    <Users className="w-4 h-4 text-slate-500" />
+                    <span className="text-xs text-slate-500">Created by: {customer.created_by_name}</span>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

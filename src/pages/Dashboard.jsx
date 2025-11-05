@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { useAuth } from "@/contexts/AuthContext";
 import { 
   TrendingUp, 
   FileText, 
@@ -44,10 +45,14 @@ export default function Dashboard() {
   const [monthlyQuotes, setMonthlyQuotes] = useState([]);
 
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    // Only load data if authenticated and token is available
+    if (isAuthenticated && localStorage.getItem('access_token')) {
+      loadDashboardData();
+    }
+  }, [isAuthenticated]);
 
   const loadDashboardData = async () => {
     try {

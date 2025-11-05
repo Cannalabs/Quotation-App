@@ -1,6 +1,6 @@
 import Layout from "./Layout.jsx";
 import Login from "./Login.jsx";
-import ProtectedRoute from "@/components/ProtectedRoute.jsx";
+import ProtectedRoute, { AdminRoute } from "@/components/ProtectedRoute.jsx";
 
 import Dashboard from "./Dashboard";
 
@@ -123,11 +123,11 @@ function PagesContent() {
             } />
             
             <Route path="/companysettings" element={
-                <ProtectedRoute>
+                <AdminRoute>
                     <Layout currentPageName="CompanySettings">
                         <CompanySettings />
                     </Layout>
-                </ProtectedRoute>
+                </AdminRoute>
             } />
             
             <Route path="/myaccount" element={
@@ -188,11 +188,11 @@ function PagesContent() {
             } />
             
             <Route path="/CompanySettings" element={
-                <ProtectedRoute>
+                <AdminRoute>
                     <Layout currentPageName="CompanySettings">
                         <CompanySettings />
                     </Layout>
-                </ProtectedRoute>
+                </AdminRoute>
             } />
             
             <Route path="/MyAccount" element={

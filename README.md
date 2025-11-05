@@ -8,8 +8,9 @@ A comprehensive, enterprise-grade quotation management system built with modern 
 - **Customer Management**: Complete CRM functionality with contact details, VAT numbers, and opportunity tracking
 - **Product Catalog**: Advanced product management with SKU tracking, pricing, categories, and inventory control
 - **Quote Builder**: Professional quotation creation with line items, discounts, VAT calculations, and custom notes
+- **Email System**: Professional HTML email templates with PDF attachments, SMTP configuration, and mobile-responsive design
 - **Company Settings**: Comprehensive company branding, logo management, and default configuration
-- **User Management**: Role-based user administration with admin and regular user roles
+- **User Management**: Role-based user administration with admin and regular user roles, password management, and forgot password functionality
 - **Dashboard Analytics**: Real-time insights with recent quotes, top products, and monthly value charts
 - **Print Support**: Professional PDF-style quotation generation
 
@@ -19,7 +20,23 @@ A comprehensive, enterprise-grade quotation management system built with modern 
 - **Archive Management**: Archive and unarchive quotes and products
 - **Search & Filtering**: Advanced search across customers, products, and quotes
 - **Responsive Design**: Mobile-first design with clay-morphism UI elements
+- **Email Features**: 
+  - Professional HTML email templates with responsive mobile design
+  - Automatic PDF attachment generation for quotations
+  - SMTP configuration through UI (Company Settings → Email Settings)
+  - Logo inline attachments for better email client compatibility
+  - Conditional discount display in email templates
+  - Test email functionality to verify SMTP settings
+- **Password Management**: 
+  - User password change (requires current password)
+  - Admin password reset (for any user)
+  - Forgot password request (contact administrator)
+  - Email enumeration attack prevention
 - **Real-time Updates**: Live data synchronization between frontend and backend
+- **Discount Validation**: Prevents negative subtotals - fixed discounts cannot exceed subtotal
+- **Comprehensive Input Validation**: Business rule validators for prices, quantities, VAT rates, discounts
+- **Enhanced Error Messages**: User-friendly validation errors displayed on the page
+- **Business Rule Enforcement**: Prevents invalid operations (e.g., deleting customers with active quotes)
 
 ## 🛠 Tech Stack
 
@@ -38,12 +55,13 @@ A comprehensive, enterprise-grade quotation management system built with modern 
 - **PostgreSQL** - Robust relational database
 - **Pydantic** - Data validation using Python type annotations
 - **Uvicorn** - ASGI server for production deployment
-- **Alembic** - Database migration tool
+- **Pytest** - Comprehensive testing framework
 
 ### Database
 - **PostgreSQL** with async support
 - **SQLAlchemy ORM** for database operations
-- **Automatic migrations** on application startup
+- **Automatic migrations** on application startup (adds missing columns automatically)
+- **99 columns** across 7 tables managed automatically
 
 ## 📋 Prerequisites
 
@@ -140,56 +158,98 @@ http://localhost:3000/api
 ```
 
 ### Authentication
-The application uses a simple authentication system with hardcoded credentials for demo purposes. In production, implement proper JWT-based authentication.
+🔐 **JWT Authentication**: The application uses JWT (JSON Web Tokens) for secure authentication.
 
-**Demo Credentials:**
-- **Admin**: `admin@example.com` / `admin123`
-- **User**: `user@example.com` / `user123`
+**Login Endpoint:**
+- `POST /api/users/verify-login` - Authenticate user and receive JWT token
+  - Request: `{ "email": "user@example.com", "password": "password123" }`
+  - Response: `{ "access_token": "jwt_token", "token_type": "bearer", "user": {...} }`
+  - Token expires in 30 days (configurable)
+
+**Protected Endpoints:**
+- All endpoints except `/api/users/verify-login`, `/api/users/forgot-password`, and `/api/company-settings/public` require authentication
+- Include JWT token in request header: `Authorization: Bearer <token>`
+- Invalid or missing tokens return 401/403 Unauthorized
+
+**Role-Based Access:**
+- **Admin users**: Full access to all endpoints including delete, archive, restore operations
+- **Regular users**: Can access their own profile and general data, but cannot:
+  - Access other users' profiles
+  - Create/delete users
+  - Access admin-only endpoints (company settings, deleted items, etc.)
+
 
 ### Endpoints
 
 #### Company Settings
-- `GET /api/company-settings` - Get company settings
-- `PUT /api/company-settings` - Update company settings
+- `GET /api/company-settings/public` - Get public company info (name, logo) **[Public - No Auth]**
+- `GET /api/company-settings` - Get company settings **[Admin Only]**
+- `PUT /api/company-settings` - Update company settings **[Admin Only]**
 
 #### Customers
-- `GET /api/customers` - List all customers
-- `POST /api/customers` - Create new customer
-- `GET /api/customers/{id}` - Get customer by ID
-- `PUT /api/customers/{id}` - Update customer
-- `DELETE /api/customers/{id}` - Delete customer (soft delete)
+- `GET /api/customers` - List all customers **[Auth Required]**
+- `POST /api/customers` - Create new customer **[Auth Required]**
+- `GET /api/customers/{id}` - Get customer by ID **[Auth Required]**
+- `PUT /api/customers/{id}` - Update customer **[Auth Required]**
+- `DELETE /api/customers/{id}` - Delete customer (soft delete) **[Auth Required]**
+- `POST /api/customers/{id}/restore` - Restore deleted customer **[Auth Required]**
 
 #### Products
-- `GET /api/products` - List all products
-- `POST /api/products` - Create new product
-- `GET /api/products/{id}` - Get product by ID
-- `PUT /api/products/{id}` - Update product
+- `GET /api/products` - List all products **[Auth Required]**
+- `POST /api/products` - Create new product **[Auth Required]**
+- `GET /api/products/{id}` - Get product by ID **[Auth Required]**
+- `PUT /api/products/{id}` - Update product **[Auth Required]**
 - `DELETE /api/products/{id}` - Delete product (soft delete) **[Admin Only]**
 - `POST /api/products/{id}/restore` - Restore deleted product **[Admin Only]**
-- `GET /api/products/deleted` - List deleted products
+- `GET /api/products/deleted` - List deleted products **[Auth Required]**
 
 #### Quotes
-- `GET /api/quotes` - List all quotes
-- `POST /api/quotes` - Create new quote
-- `GET /api/quotes/{id}` - Get quote by ID
-- `PUT /api/quotes/{id}` - Update quote
+- `GET /api/quotes` - List all quotes with pagination **[Auth Required]**
+  - Query params: `skip` (default: 0), `limit` (default: 50, max: 100), `include_deleted` (default: false)
+  - Example: `/api/quotes?skip=0&limit=20`
+- `POST /api/quotes` - Create new quote (with discount validation) **[Auth Required]**
+- `GET /api/quotes/{id}` - Get quote by ID **[Auth Required]**
+- `PUT /api/quotes/{id}` - Update quote (with discount validation) **[Auth Required]**
 - `DELETE /api/quotes/{id}` - Delete quote (soft delete) **[Admin Only]**
 - `POST /api/quotes/{id}/restore` - Restore deleted quote **[Admin Only]**
 - `POST /api/quotes/{id}/archive` - Archive quote **[Admin Only]**
 - `POST /api/quotes/{id}/unarchive` - Unarchive quote **[Admin Only]**
-- `GET /api/quotes/deleted` - List deleted quotes
-- `GET /api/quotes/archived` - List archived quotes
+- `GET /api/quotes/deleted` - List deleted quotes with pagination **[Admin Only]**
+  - Query params: `skip` (default: 0), `limit` (default: 50, max: 100)
+  - Example: `/api/quotes/deleted?skip=0&limit=20`
+
+**Quote Validation:**
+- Fixed discounts cannot exceed subtotal
+- Percentage discounts must be 0-100%
+- Totals are automatically calculated and validated
 
 #### Users
-- `GET /api/users` - List all users **[Admin Only]**
-- `POST /api/users` - Create new user **[Admin Only]**
-- `GET /api/users/{id}` - Get user by ID
-- `PUT /api/users/{id}` - Update user
-- `DELETE /api/users/{id}` - Delete user (soft delete) **[Admin Only]**
-- `POST /api/users/{id}/restore` - Restore deleted user **[Admin Only]**
-- `GET /api/users/deleted` - List deleted users
-- `POST /api/users/verify-login` - Verify user login credentials
-- `PUT /api/users/{id}/change-password` - Change user password
+- `GET /api/users` - List all users **[Auth Required, Admin Only]**
+- `POST /api/users` - Create new user **[Auth Required, Admin Only]**
+- `GET /api/users/{id}` - Get user by ID **[Auth Required]** (Users can only access their own profile)
+- `PUT /api/users/{id}` - Update user **[Auth Required]** (Users can only update their own profile)
+- `DELETE /api/users/{id}` - Delete user (soft delete) **[Auth Required, Admin Only]**
+- `POST /api/users/{id}/restore` - Restore deleted user **[Auth Required, Admin Only]**
+- `GET /api/users/deleted` - List deleted users **[Auth Required]**
+- `POST /api/users/verify-login` - Verify user login credentials **[Public - Returns JWT Token]**
+- `POST /api/users/{id}/change-password` - Change user password (requires current password) **[Auth Required]**
+- `POST /api/users/{id}/reset-password` - Admin reset password (does not require current password) **[Auth Required, Admin Only]**
+- `POST /api/users/forgot-password` - Forgot password request **[Public - No Auth]**
+
+#### Email Settings
+- `GET /api/email/config` - Get email configuration (SMTP settings) **[Auth Required]**
+- `GET /api/email/config-status` - Check email configuration status **[Auth Required]**
+- `POST /api/email/save-config` - Save email configuration (SMTP settings) **[Auth Required]**
+- `POST /api/email/send-quotation` - Send quotation email with HTML template and PDF attachment **[Auth Required]**
+- `POST /api/email/send-test` - Send test email to verify SMTP configuration **[Auth Required]**
+
+**Email Features:**
+- Professional HTML email templates with responsive mobile design
+- Automatic PDF attachment generation from quotation data
+- Logo inline attachments (CID) for better email client compatibility
+- Conditional discount display (only shown if discount exists)
+- Mobile-responsive layout that stacks fields vertically on small screens
+- Full date formatting (DD/MM/YYYY) for validity dates
 
 ### Response Formats
 
@@ -208,22 +268,61 @@ All endpoints return JSON responses with the following structure:
 #### Error Response
 ```json
 {
-  "detail": "Error message description"
+  "detail": "Error message description",
+  "error": "error_type"  // Optional: error type for client handling
 }
 ```
 
+**Error Types:**
+- `401 Unauthorized`: Missing or invalid authentication token
+- `403 Forbidden`: Valid token but insufficient permissions
+- `400 Bad Request`: Validation errors (preserves specific error messages)
+- `404 Not Found`: Resource not found
+- `422 Unprocessable Entity`: Request validation errors (Pydantic)
+- `500 Internal Server Error`: Server errors (generic message, details logged server-side)
+
+**Browser vs API Responses:**
+- Browser requests to protected endpoints receive HTML error pages
+- API requests (with `Accept: application/json`) receive JSON error responses
+
 ## 🔐 Security Features
+
+### JWT Authentication
+- **Token-Based Authentication**: All protected endpoints require JWT tokens
+- **Secure Token Storage**: Tokens stored in browser localStorage
+- **Token Expiration**: 30-day expiration (configurable)
+- **Automatic Token Refresh**: Frontend handles token validation and refresh
+- **Secure Secret Key**: JWT secret key configurable via environment variables
 
 ### Role-Based Access Control
 - **Admin Users**: Full access to all features including delete, archive, and restore operations
 - **Regular Users**: Limited access to view and edit operations only
-- **Protected Endpoints**: Sensitive operations require admin authentication
+- **Protected Endpoints**: All data endpoints require authentication
+- **User Profile Access**: Users can only access/modify their own profile
+- **Admin-Only Operations**: Delete, restore, and sensitive configuration endpoints restricted to admins
+
+### Error Handling & Security
+- **Centralized Exception Handling**: All errors logged server-side with full details
+- **Generic Client Messages**: Clients receive user-friendly error messages without exposing internal details
+- **HTML Error Pages**: Browser requests to protected endpoints receive user-friendly HTML error pages
+- **JSON API Responses**: API clients receive proper JSON error responses
+- **Validation Error Preservation**: 400 errors preserve specific validation messages for better UX
 
 ### Data Protection
 - **Soft Delete**: All deletions are reversible
-- **Input Validation**: Comprehensive data validation using Pydantic schemas
+- **Comprehensive Input Validation**: Business rule validators for all fields:
+  - VAT rates: 0-100% validation
+  - Prices: Non-negative validation
+  - Quantities: Positive number validation
+  - Discounts: Validated against subtotal (prevents negative totals)
+  - String lengths: Maximum length constraints
+- **Business Rule Enforcement**: 
+  - Cannot delete customers with active quotes
+  - Cannot use deleted/archived products in quotes
+  - Cannot update/delete quotes in certain states
 - **SQL Injection Prevention**: SQLAlchemy ORM provides built-in protection
-- **CORS Configuration**: Proper cross-origin resource sharing setup
+- **CORS Configuration**: Proper cross-origin resource sharing setup (uses config.py)
+- **Frontend Error Display**: Validation errors shown on page, not just in console
 
 ## 🎨 UI/UX Features
 
@@ -253,8 +352,15 @@ All endpoints return JSON responses with the following structure:
 ### Key Features
 - **Soft Delete**: `deleted` and `archived` flags for safe data management
 - **Audit Trail**: `created_at` and `updated_at` timestamps
-- **Foreign Keys**: Proper relational integrity
-- **Indexes**: Optimized query performance
+- **Foreign Keys**: Proper relational integrity with CASCADE/RESTRICT rules
+- **Indexes**: Optimized query performance on frequently searched fields
+- **Automatic Migrations**: Missing columns added automatically on server startup
+- **99 Columns**: Across 7 tables managed automatically
+
+### Database Migration System
+- **Automatic Column Addition**: When you add new fields to models, they're automatically added to database
+- **Safe Operations**: Only adds columns (never removes or modifies)
+- **Zero Downtime**: Adds columns without blocking existing operations
 
 ## 🚀 Deployment
 
@@ -275,38 +381,71 @@ VITE_APP_NAME=Grow United Quote Builder
 
 ### Production Checklist
 - [ ] Set up PostgreSQL database
-- [ ] Configure environment variables
+- [ ] Configure environment variables (see `env.example`)
+- [ ] **Set JWT secret key** in `backend/.env.conf` (generate secure random key)
 - [ ] Set up reverse proxy (Nginx)
 - [ ] Configure SSL certificates
 - [ ] Set up monitoring and logging
 - [ ] Configure backup strategy
-
+- [ ] Review and test all protected endpoints
+- [ ] Verify CORS settings for production domains
 ## 🧪 Testing
 
 ### Running Tests
 ```bash
-# Backend tests
+# Backend tests (124 tests, all passing)
 cd backend
-pytest
+source ../venv/bin/activate  # Activate virtual environment
+pytest tests/ -v
 
-# Frontend tests
-npm test
+# Run with HTML report
+pytest tests/ -v --html=test_report.html --self-contained-html
+
+# Run with coverage report
+pytest tests/ -v --cov=. --cov-report=html --cov-report=term
+
+# Run specific test file
+pytest tests/test_quotes.py -v
+pytest tests/test_products.py -v
+pytest tests/test_customers.py -v
+pytest tests/test_protected_routes.py -v
+
+# Run specific test
+pytest tests/test_protected_routes.py::test_protected_endpoint_no_token -v
 ```
 
 ### Test Coverage
+- **124 automated tests** covering all major functionality
 - Unit tests for all API endpoints
 - Integration tests for database operations
-- Frontend component testing
-- End-to-end user flow testing
+- Authentication and authorization tests (30+ protected route tests)
+- Discount validation tests
+- Business rule validation tests
+- Edge cases and error handling tests
+- Data normalization tests
+
+### Test Files
+- `test_quotes.py` - Quote API tests including discount validation and pagination
+- `test_products.py` - Product API tests including validation
+- `test_customers.py` - Customer API tests including business rules
+- `test_users.py` - User API tests including authentication
+- `test_company_settings.py` - Company settings tests
+- `test_protected_routes.py` - Comprehensive authentication and authorization tests (30+ tests)
+
+**All 124 tests passing** ✅
 
 ## 📈 Performance
 
 ### Optimization Features
 - **Database Indexing**: Optimized queries for large datasets
-- **Lazy Loading**: Efficient data loading strategies
-- **Caching**: Redis integration for frequently accessed data
-- **Pagination**: Large dataset handling
-- **Compression**: Gzip compression for API responses
+- **Selectin Loading**: Efficient data loading with `selectinload` to prevent N+1 queries
+- **Code Refactoring**: ~500+ lines of duplicated code eliminated across all routers
+- **Helper Functions**: Consistent patterns for commit/refresh, entity lookups, and validations
+- **Pagination**: Large dataset handling (products, customers, users, quotes endpoints)
+  - Default limit: 50 records per page
+  - Maximum limit: 100 records per page
+  - Skip parameter for page navigation
+- **Async Operations**: Full async/await support for non-blocking I/O
 
 ### Monitoring
 - **API Response Times**: Performance tracking
@@ -332,9 +471,10 @@ npm test
 ## 📞 Support
 
 ### Documentation
-- **API Docs**: Available at `/docs` endpoint
+- **API Docs**: Available at `/docs` endpoint (Swagger UI)
 - **Code Comments**: Comprehensive inline documentation
 - **README**: This comprehensive guide
+- **Email Setup**: See `EMAIL_SETUP.md` for email configuration instructions
 
 ### Contact
 - **Issues**: Use GitHub Issues for bug reports
@@ -354,4 +494,64 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ---
 
-**Built with ❤️ by the Grow United development team**# Quote-App
+**Built with ❤️ by the Grow United development team**
+
+---
+
+## 📝 Recent Updates (November 2025)
+
+### ✅ Security Improvements
+- **JWT Authentication**: Implemented secure JWT-based authentication for all endpoints
+- **Protected Routes**: All data endpoints now require authentication
+- **Role-Based Access Control**: Enhanced RBAC with user profile access restrictions
+- **Centralized Exception Handling**: Server-side logging with generic client messages
+- **HTML Error Pages**: Browser-friendly error pages for protected endpoints
+- **Password Security**: Login response excludes password_hash from user data
+
+### ✅ Code Quality Improvements
+- **Code Duplication Eliminated**: All routers refactored with consistent helper function patterns
+- **~500+ lines of duplicated code removed** across quotes, products, customers, email, company_settings, and users routers
+- **Consistent Patterns**: `_commit_and_refresh()`, `_get_X_or_404()` helpers in all routers
+- **Exception Handler**: Centralized error handling with proper logging and client-friendly messages
+
+### ✅ New Features
+
+#### Email System (Added by aqlos)
+- **Professional HTML Email Templates**: Beautiful, responsive email templates with company branding
+- **Mobile-Responsive Design**: Email templates automatically adapt to mobile devices with vertical stacking
+- **PDF Attachments**: Automatic PDF generation and attachment for quotation emails
+- **SMTP Configuration UI**: Configure email settings through Company Settings → Email Settings
+- **Logo Inline Attachments**: Company logo embedded as inline attachment (CID) for better email client compatibility
+- **Conditional Discount Display**: Discount field only shown in email when discount exists
+- **Test Email Functionality**: Send test emails to verify SMTP configuration
+- **Email Client Compatibility**: Works with Gmail, Outlook, and other major email clients
+
+#### Password Management (Added by aqlos)
+- **Forgot Password**: Users can request password reset (redirects to contact administrator)
+- **Email Enumeration Prevention**: Forgot password endpoint prevents email enumeration attacks
+- **Password Change**: Users can change their password (requires current password)
+- **Admin Password Reset**: Admins can reset any user's password without knowing current password
+
+#### Business Logic Improvements
+- **Discount Validation**: Prevents negative subtotals when fixed discounts exceed subtotal
+- **Enhanced Error Messages**: Validation errors displayed on page, not just in terminal
+- **Business Rule Validations**: Prevents invalid operations (e.g., deleting customers with active quotes)
+- **Data Normalization**: `tax_id` field automatically maps to `vat_number`
+- **Full Date Formatting**: Validity dates now display in full DD/MM/YYYY format
+
+### ✅ Testing
+- **124 Tests**: Comprehensive test suite covering all major functionality (up from 96)
+- **30+ Protected Route Tests**: New comprehensive test suite for authentication and authorization
+- **Pagination Tests**: Tests for quotes pagination functionality
+- **All Tests Passing**: 100% test success rate (124/124 passing)
+- **Test Fixtures**: Shared authentication fixtures for all test files
+- **HTML Test Reports**: Detailed test reports with coverage analysis
+
+### ✅ API Improvements
+- **Public Endpoints**: Company settings public endpoint for login page
+- **User Profile Restrictions**: Users can only access/modify their own profiles
+- **Error Response Format**: Consistent error responses with proper status codes
+- **Browser Detection**: Smart error handling (HTML for browsers, JSON for API clients)
+- **Pagination Support**: Quotes endpoints now support pagination (skip/limit parameters)
+
+*Last Updated: November 2025*

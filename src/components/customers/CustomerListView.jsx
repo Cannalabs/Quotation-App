@@ -24,7 +24,7 @@ export default function CustomerListView({
         <Table>
           <TableHeader>
             <TableRow>
-              {Array(9).fill(0).map((_, i) => (
+              {Array(10).fill(0).map((_, i) => (
                 <TableHead key={i}><Skeleton className="h-4 w-20" /></TableHead>
               ))}
             </TableRow>
@@ -32,7 +32,7 @@ export default function CustomerListView({
           <TableBody>
             {Array(5).fill(0).map((_, i) => (
               <TableRow key={i}>
-                {Array(9).fill(0).map((_, j) => (
+                {Array(10).fill(0).map((_, j) => (
                   <TableCell key={j}><Skeleton className="h-4 w-16" /></TableCell>
                 ))}
               </TableRow>
@@ -82,11 +82,17 @@ export default function CustomerListView({
             <SortableHeader field="country">Country</SortableHeader>
             <TableHead>VAT Number</TableHead>
             <SortableHeader field="created_date">Created</SortableHeader>
+            <TableHead>Created By</TableHead>
             <TableHead className="w-24">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {customers.map((customer) => (
+          {customers.map((customer) => {
+            // Debug: Log first customer to verify created_by_name is present
+            if (customers.indexOf(customer) === 0) {
+              console.log('Sample customer data:', { id: customer.id, created_by: customer.created_by, created_by_name: customer.created_by_name });
+            }
+            return (
             <TableRow 
               key={customer.id} 
               className="hover:bg-slate-50/50 transition-colors"
@@ -139,6 +145,9 @@ export default function CustomerListView({
               <TableCell className="text-slate-600 text-sm">
                 {customer.created_date && format(new Date(customer.created_date), 'MMM dd, yyyy')}
               </TableCell>
+              <TableCell className="text-slate-600 text-sm">
+                {customer.created_by_name || 'N/A'}
+              </TableCell>
               <TableCell>
                 <Button
                   variant="ghost"
@@ -150,7 +159,8 @@ export default function CustomerListView({
                 </Button>
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
       </div>

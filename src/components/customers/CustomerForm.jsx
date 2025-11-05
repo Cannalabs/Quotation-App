@@ -43,7 +43,14 @@ export default function CustomerForm({ customer, onSave, onCancel }) {
     const loadCountries = async () => {
       try {
         const countriesData = await Country.list();
-        setCountries(countriesData);
+        // Deduplicate countries by code to avoid duplicate keys
+        const uniqueCountries = countriesData.reduce((acc, country) => {
+          if (!acc.find(c => c.code === country.code)) {
+            acc.push(country);
+          }
+          return acc;
+        }, []);
+        setCountries(uniqueCountries);
       } catch (error) {
         console.error("Failed to load countries:", error);
         // Fallback to basic list if API fails
@@ -162,8 +169,8 @@ export default function CustomerForm({ customer, onSave, onCancel }) {
                   <SelectValue placeholder={isLoadingCountries ? "Loading countries..." : "Select country"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {countries.map((country) => (
-                    <SelectItem key={country.code} value={country.name}>
+                  {countries.map((country, index) => (
+                    <SelectItem key={country.code || `country-${index}`} value={country.name}>
                       {country.name}
                     </SelectItem>
                   ))}

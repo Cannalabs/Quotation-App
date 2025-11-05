@@ -365,7 +365,9 @@ export default function QuoteBuilder() {
       }, 2000);
 
     } catch (error) {
-      setMessage({ type: "error", text: "Failed to save quotation. Please try again." });
+      // Extract validation error message from error object
+      const errorMessage = error.message || error.toString() || "Failed to save quotation. Please try again.";
+      setMessage({ type: "error", text: errorMessage });
       console.error("Save error:", error);
     } finally {
       setIsSaving(false);

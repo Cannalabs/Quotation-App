@@ -49,7 +49,16 @@ export const AuthProvider = ({ children }) => {
       });
       
       if (response.ok) {
-        const dbUser = await response.json();
+        const loginResponse = await response.json();
+        
+        // Backend now returns: { access_token, token_type, user }
+        const { access_token, user: dbUser } = loginResponse;
+        
+        if (!access_token || !dbUser) {
+          console.error('Missing access_token or user in login response:', loginResponse);
+          return { success: false, error: 'Invalid response from server' };
+        }
+        
         const userData = {
           id: dbUser.id.toString(),
           full_name: dbUser.full_name,
@@ -58,8 +67,11 @@ export const AuthProvider = ({ children }) => {
           profile_picture_url: dbUser.profile_picture_url || ''
         };
         
-        // Store user in localStorage
+        // Store user and token in localStorage
         localStorage.setItem('current_user', JSON.stringify(userData));
+        localStorage.setItem('access_token', access_token);
+        
+        // Update state immediately - don't call checkAuthStatus which would try to fetch from API
         setUser(userData);
         setIsAuthenticated(true);
         return { success: true, user: userData };
@@ -76,13 +88,20 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      await User.logout();
+      // Clear user and token from localStorage
+      localStorage.removeItem('current_user');
+      localStorage.removeItem('access_token');
       setUser(null);
       setIsAuthenticated(false);
       return { success: true };
     } catch (error) {
       console.error('Logout failed:', error);
-      return { success: false, error: 'Logout failed. Please try again.' };
+      // Still clear localStorage even if there's an error
+      localStorage.removeItem('current_user');
+      localStorage.removeItem('access_token');
+      setUser(null);
+      setIsAuthenticated(false);
+      return { success: true };
     }
   };
 

@@ -159,6 +159,7 @@ export default function QuotesList({
               <TableHead>Date</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Total</TableHead>
+              <TableHead>Created By</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -182,6 +183,9 @@ export default function QuotesList({
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-semibold">€{quote.total?.toFixed(2) || quote.total_amount?.toFixed(2)}</TableCell>
+                <TableCell className="text-slate-600 text-sm">
+                  {quote.created_by_name || 'N/A'}
+                </TableCell>
                 <TableCell className="flex gap-2">
                   {showTrash ? (
                     <>
