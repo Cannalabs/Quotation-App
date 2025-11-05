@@ -24,7 +24,17 @@ def create_access_token(data: dict) -> str:
     
     Returns:
         Encoded JWT token string
+    
+    Raises:
+        ValueError: If JWT secret key is not configured
     """
+    # Security check: prevent token generation with empty/insecure secret
+    if not settings.jwt_secret_key or settings.jwt_secret_key == "your-secret-key-change-in-production":
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("JWT secret key is not configured! Cannot generate tokens.")
+        raise ValueError("JWT secret key is not configured. Please set jwt_secret_key in backend/.env.conf")
+    
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_access_token_expire_minutes)
     to_encode.update({"exp": expire})
@@ -48,7 +58,18 @@ async def get_current_user(
     
     Raises:
         HTTPException: 401 if authentication fails
+        ValueError: If JWT secret key is not configured
     """
+    # Security check: prevent token validation with empty/insecure secret
+    if not settings.jwt_secret_key or settings.jwt_secret_key == "your-secret-key-change-in-production":
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("JWT secret key is not configured! Cannot validate tokens.")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Server configuration error: JWT secret key is not configured"
+        )
+    
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -99,6 +120,10 @@ async def get_current_user_optional(
         User object if authenticated, None otherwise
     """
     if credentials is None:
+        return None
+    
+    # Security check: if secret is not configured, return None (can't validate)
+    if not settings.jwt_secret_key or settings.jwt_secret_key == "your-secret-key-change-in-production":
         return None
     
     try:
