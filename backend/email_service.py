@@ -216,22 +216,398 @@ class EmailService:
             # Create email subject
             subject = f"Quotation {quotation_number} - {company_name}"
             
-            # Create email body
-            body = f"""Dear {customer_name},
-
-Please find attached our quotation {quotation_number} for your review.
-
-Total Amount: €{total_amount:.2f}
-Valid Until: {valid_until}
-
-{notes if notes else ''}
-
-Best regards,
-{company_name}"""
+            # Extract additional data from quotation_data if available
+            company_settings = {}
+            quotation_date = ""
+            company_phone = ""
+            company_website = ""
+            
+            if quotation_data:
+                company_settings = quotation_data.get('company_settings', {})
+                quotation_date_raw = quotation_data.get('date', '')
+                
+                # Format quotation date
+                if quotation_date_raw:
+                    try:
+                        from datetime import datetime
+                        if isinstance(quotation_date_raw, str):
+                            if 'T' in quotation_date_raw or 'Z' in quotation_date_raw:
+                                dt = datetime.fromisoformat(quotation_date_raw.replace('Z', '+00:00'))
+                            else:
+                                dt = datetime.strptime(quotation_date_raw, '%Y-%m-%d')
+                            quotation_date = dt.strftime('%d/%m/%Y')
+                        else:
+                            quotation_date = str(quotation_date_raw)
+                    except Exception:
+                        quotation_date = str(quotation_date_raw) if quotation_date_raw else ""
+                
+                company_phone = company_settings.get('phone', '')
+                company_website = company_settings.get('website', '')
+            
+            # Format valid_until date - ensure full date with year
+            valid_until_formatted = valid_until
+            try:
+                from datetime import datetime
+                if isinstance(valid_until, str) and valid_until.strip():
+                    # Try ISO format first (with T or Z)
+                    if 'T' in valid_until or 'Z' in valid_until:
+                        dt = datetime.fromisoformat(valid_until.replace('Z', '+00:00'))
+                        valid_until_formatted = dt.strftime('%d/%m/%Y')
+                    # Try DD/MM/YYYY format
+                    elif valid_until.count('/') == 2:
+                        parts = valid_until.split('/')
+                        if len(parts) == 3 and len(parts[2]) == 4:  # Has year
+                            valid_until_formatted = valid_until  # Already full format
+                        elif len(parts) == 3 and len(parts[2]) == 2:  # Has 2-digit year
+                            # Convert 2-digit year to 4-digit
+                            year = int(parts[2])
+                            if year < 50:
+                                year = 2000 + year
+                            else:
+                                year = 1900 + year
+                            valid_until_formatted = f"{parts[0]}/{parts[1]}/{year}"
+                    # Try DD/MM format - add current year
+                    elif valid_until.count('/') == 1:
+                        parts = valid_until.split('/')
+                        if len(parts) == 2:
+                            current_year = datetime.now().year
+                            valid_until_formatted = f"{parts[0]}/{parts[1]}/{current_year}"
+                    # Try YYYY-MM-DD format
+                    elif '-' in valid_until and len(valid_until) >= 10:
+                        dt = datetime.strptime(valid_until[:10], '%Y-%m-%d')
+                        valid_until_formatted = dt.strftime('%d/%m/%Y')
+            except Exception as e:
+                logger.warning(f"Failed to format validity date '{valid_until}': {e}")
+                # If parsing fails, try to ensure it has a year
+                if valid_until and '/' in valid_until and valid_until.count('/') == 1:
+                    from datetime import datetime
+                    current_year = datetime.now().year
+                    valid_until_formatted = f"{valid_until}/{current_year}"
+            
+            # Format currency symbol (assuming EUR for now)
+            currency_symbol = "€"
+            
+            # Get logo - try assets folder first, then company settings, then placeholder
+            # Use CID (Content-ID) for inline attachment for better email client compatibility
+            logo_cid = "company-logo"
+            logo_url = f"cid:{logo_cid}"  # Use CID reference for inline attachment
+            logo_attachment_path = None
+            
+            # Try to use logo from assets folder
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'src', 'assets', 'logo.png')
+            if os.path.exists(logo_path):
+                try:
+                    # Copy logo to temp file for inline attachment
+                    import shutil
+                    logo_temp = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+                    shutil.copy2(logo_path, logo_temp.name)
+                    logo_temp.close()
+                    logo_attachment_path = logo_temp.name
+                    logger.info(f"Using logo from assets folder: {logo_path} (copied to {logo_attachment_path})")
+                except Exception as e:
+                    logger.warning(f"Failed to copy logo from assets folder: {e}")
+                    logo_attachment_path = None
+            
+            # Fallback to company settings logo_url if assets logo not available
+            if not logo_attachment_path:
+                company_logo_url = company_settings.get('logo_url', '')
+                if company_logo_url:
+                    try:
+                        if company_logo_url.startswith('data:'):
+                            # Extract base64 data and save to temp file
+                            try:
+                                header, data = company_logo_url.split(',', 1)
+                                content_type = header.split(':')[1].split(';')[0]
+                                img_data = base64.b64decode(data)
+                                ext = 'png' if 'png' in content_type else ('jpg' if 'jpeg' in content_type or 'jpg' in content_type else 'png')
+                                logo_temp = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}')
+                                logo_temp.write(img_data)
+                                logo_temp.close()
+                                logo_attachment_path = logo_temp.name
+                                logger.info(f"Extracted logo from data URI and saved to temp file")
+                            except Exception as e:
+                                logger.warning(f"Failed to extract logo from data URI: {e}")
+                        elif company_logo_url.startswith('http://') or company_logo_url.startswith('https://'):
+                            # Download and save to temp file
+                            try:
+                                response = requests.get(company_logo_url, timeout=5, allow_redirects=True)
+                                if response.status_code == 200:
+                                    content_type = response.headers.get('Content-Type', 'image/png')
+                                    ext = 'png'
+                                    if 'jpeg' in content_type or 'jpg' in content_type:
+                                        ext = 'jpg'
+                                    elif 'png' in content_type:
+                                        ext = 'png'
+                                    elif 'gif' in content_type:
+                                        ext = 'gif'
+                                    logo_temp = tempfile.NamedTemporaryFile(delete=False, suffix=f'.{ext}')
+                                    logo_temp.write(response.content)
+                                    logo_temp.close()
+                                    logo_attachment_path = logo_temp.name
+                                    logger.info(f"Downloaded company logo and saved to temp file: {len(response.content)} bytes")
+                            except Exception as e:
+                                logger.warning(f"Failed to download company logo: {e}")
+                    except Exception as e:
+                        logger.warning(f"Error processing company logo: {e}")
+            
+            # If no logo found, we'll use a placeholder URL (but it won't work as CID)
+            if not logo_attachment_path:
+                logger.warning("No logo found, email will show broken image or placeholder")
+                logo_url = 'https://via.placeholder.com/44x44/00685e/ffffff?text=CANNA'
+            else:
+                # Ensure logo_url uses CID format when we have an attachment
+                logo_url = f"cid:{logo_cid}"
+            
+            # Ensure logo_url is always a string (never None or empty)
+            if not logo_url or not isinstance(logo_url, str):
+                logger.error(f"logo_url is invalid: {logo_url}, using placeholder")
+                logo_url = 'https://via.placeholder.com/44x44/00685e/ffffff?text=CANNA'
+            
+            # Log the final logo_url for debugging
+            logger.info(f"Final logo_url for email: {logo_url} (has attachment: {logo_attachment_path is not None})")
+            
+            # Format dates for display
+            date_display = quotation_date if quotation_date else 'N/A'
+            total_display = f"{currency_symbol}{total_amount:.2f}"
+            validity_display = valid_until_formatted
+            
+            # Get discount information if available
+            discount_amount = 0
+            has_discount = False
+            if quotation_data:
+                totals = quotation_data.get('totals', {})
+                discount_amount = totals.get('discountAmount', 0) or 0
+                if discount_amount > 0:
+                    has_discount = True
+                # Also check discount object
+                discount = quotation_data.get('discount', {})
+                if discount.get('type') and discount.get('type') != 'none' and discount.get('value', 0) > 0:
+                    has_discount = True
+                    # Recalculate if not in totals
+                    if discount_amount == 0:
+                        subtotal = totals.get('subtotal', 0) or 0
+                        if discount.get('type') == 'percentage':
+                            discount_amount = subtotal * (discount.get('value', 0) / 100)
+                        elif discount.get('type') == 'fixed':
+                            discount_amount = discount.get('value', 0)
+            
+            discount_display = f"-{currency_symbol}{discount_amount:.2f}" if has_discount else None
+            
+            # Get contact person from quotation_data or use customer_name
+            contact_person = customer_name
+            if quotation_data:
+                customer = quotation_data.get('customer', {})
+                if customer:
+                    contact_person = customer.get('contact_person') or customer.get('name') or customer_name
+            
+            # Build discount row HTML if discount exists (matches Modern Card template structure)
+            discount_row_html = ""
+            if has_discount and discount_display:
+                discount_row_html = f"""
+              <tr class="details-row">
+                <td class="details-cell">
+                  <span class="details-label">Discount:</span>
+                  <span class="details-value">{discount_display}</span>
+                </td>
+              </tr>"""
+            
+            # Generate view URL - use first allowed origin or placeholder
+            # In production, you should set FRONTEND_URL in config
+            from config import settings as app_settings
+            frontend_base = app_settings.allowed_origins[0] if app_settings.allowed_origins else "http://localhost:5173"
+            
+            # Extract quote ID from quotation_data if available for URL building
+            quote_id = ""
+            if quotation_data:
+                # Try to get quote ID from quotation_data
+                quote_id = quotation_data.get('id', '')
+                if not quote_id and quotation_number:
+                    # Try to extract ID from quotation number (e.g., QUO2025/0009 -> 9)
+                    try:
+                        parts = quotation_number.split('/')
+                        if len(parts) > 1:
+                            quote_id = parts[-1].lstrip('0') or '1'
+                    except:
+                        pass
+            
+            view_url = f"{frontend_base}/quotebuilder?id={quote_id}" if quote_id else "#"
+            download_url = "#"  # PDF is attached, so download link can be optional
+            
+            # Get company brand name (from company_settings or use company_name)
+            brand_name = company_settings.get('company_name', company_name)
+            if not brand_name:
+                brand_name = "CANNA"
+            
+            # Create HTML email body - Modern Card Template
+            body = f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Quotation</title>
+  <style>
+    body, table, td, a {{ -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; }}
+    table, td {{ mso-table-lspace:0pt; mso-table-rspace:0pt; }}
+    img {{ border:0; height:auto; line-height:100%; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; }}
+    body {{ margin:0; padding:0; width:100% !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; background:#e8f4f3; color:#1a1a1a; font-size:16px; }}
+    .email-wrapper {{ background:#e8f4f3; padding:24px 0; }}
+    .container {{ max-width:680px; margin:0 auto; padding:0 15px; }}
+    .main-card {{ background:#ffffff; border-radius:16px; overflow:hidden; box-shadow:0 4px 16px rgba(0,104,94,0.15); }}
+    .header {{ background:#ffffff; padding:40px 36px; color:#00685e; }}
+    .header-content {{ display:table; width:100%; }}
+    .logo-cell {{ display:table-cell; vertical-align:middle; width:auto; }}
+    .logo {{ height:52px; width:auto; max-width:200px; }}
+    .quote-info {{ display:table-cell; vertical-align:middle; text-align:right; }}
+    .quote-label {{ font-size:13px; color:#6b7280; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px; }}
+    .quote-number {{ font-size:28px; font-weight:700; margin:0; color:#00685e; }}
+    .body {{ padding:36px; }}
+    .greeting {{ font-size:20px; font-weight:600; color:#1a1a1a; margin:0 0 16px 0; }}
+    .intro-text {{ font-size:16px; color:#4a5568; margin:0 0 32px 0; line-height:1.7; }}
+    .cards-grid {{ width:100%; border-collapse:separate; border-spacing:16px; margin:28px 0; }}
+    .info-card {{ display:table-cell; background:#f8f9fa; border:2px solid #e5e7eb; border-radius:12px; padding:20px; vertical-align:top; width:50%; }}
+    .card-label {{ font-size:12px; color:#6b7280; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:10px; font-weight:600; }}
+    .card-value {{ font-size:20px; font-weight:700; color:#00685e; word-wrap:break-word; white-space:normal; }}
+    .details-section {{ background:#f8f9fa; border-radius:12px; padding:24px; margin:28px 0; }}
+    .details-table {{ width:100%; border-collapse:collapse; }}
+    .details-row {{ border-bottom:1px solid #e5e7eb; }}
+    .details-row:last-child {{ border-bottom:none; }}
+    .details-cell {{ padding:14px 0; font-size:15px; vertical-align:top; }}
+    .details-label {{ font-weight:600; color:#374151; width:150px; display:inline-block; }}
+    .details-value {{ font-weight:500; color:#1a1a1a; word-wrap:break-word; white-space:normal; }}
+    .total-card {{ background:#00685e; border-radius:12px; padding:24px; margin:28px 0; text-align:center; }}
+    .total-label {{ font-size:14px; color:#ffffff; opacity:0.9; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:8px; }}
+    .total-value {{ font-size:32px; font-weight:700; color:#ffffff; word-wrap:break-word; }}
+    .footer {{ padding:28px 36px; background:#f8f9fa; border-top:1px solid #e5e7eb; }}
+    .footer-text {{ font-size:14px; color:#6b7280; margin:0; line-height:1.6; }}
+    @media only screen and (max-width:600px) {{
+      .email-wrapper {{ padding:12px 0; }}
+      .container {{ padding:0 10px; }}
+      .header {{ padding:28px 24px !important; }}
+      .header-content {{ display:block !important; }}
+      .logo-cell {{ display:block !important; margin-bottom:16px; }}
+      .quote-info {{ display:block !important; text-align:left !important; }}
+      .quote-number {{ font-size:24px; color:#00685e !important; }}
+      .body {{ padding:28px 24px !important; }}
+      .greeting {{ font-size:18px; }}
+      .intro-text {{ font-size:15px; }}
+      .cards-grid {{ border-spacing:12px !important; }}
+      .info-card {{ display:block !important; width:auto; margin-bottom:12px !important; }}
+      .info-card:last-child {{ margin-bottom:0 !important; }}
+      .details-section {{ padding:20px !important; }}
+      .details-cell {{ padding:12px 0 !important; font-size:14px; }}
+      .details-label {{ width:100% !important; display:block !important; margin-bottom:6px; }}
+      .details-value {{ display:block !important; }}
+      .total-card {{ padding:20px !important; }}
+      .total-value {{ font-size:28px; }}
+      .footer {{ padding:24px !important; }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="container">
+      <div class="main-card">
+        <div class="header">
+          <table class="header-content" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td class="logo-cell">
+                <img src="{logo_url}" alt="Company Logo" class="logo" />
+              </td>
+              <td class="quote-info">
+                <div class="quote-label">Quotation</div>
+                <div class="quote-number">{quotation_number}</div>
+              </td>
+            </tr>
+          </table>
+        </div>
+        <div class="body">
+          <h2 class="greeting">Dear {contact_person},</h2>
+          <p class="intro-text">
+            Thank you for your interest in <strong>Canna</strong> products. Please find attached the quotation <strong>{quotation_number}</strong> with details of our latest offers and pricing.
+          </p>
+          <table class="cards-grid" cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td class="info-card">
+                <div class="card-label">Quote Date</div>
+                <div class="card-value">{date_display}</div>
+              </td>
+              <td class="info-card">
+                <div class="card-label">Valid Until</div>
+                <div class="card-value">{validity_display}</div>
+              </td>
+            </tr>
+          </table>
+          <div class="details-section">
+            <table class="details-table" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr class="details-row">
+                <td class="details-cell">
+                  <span class="details-label">Quotation Number:</span>
+                  <span class="details-value">{quotation_number}</span>
+                </td>
+              </tr>
+              <tr class="details-row">
+                <td class="details-cell">
+                  <span class="details-label">Contact Person:</span>
+                  <span class="details-value">{contact_person}</span>
+                </td>
+              </tr>
+              {discount_row_html}
+            </table>
+          </div>
+          <div class="total-card">
+            <div class="total-label">Total Amount</div>
+            <div class="total-value">{total_display}</div>
+          </div>
+          <p class="intro-text" style="margin-top:28px; margin-bottom:0;">
+            We look forward to continuing our partnership and supporting your business growth.
+          </p>
+        </div>
+        <div class="footer">
+          <p class="footer-text">
+            <strong>{company_name}</strong> — If you have any questions, reply to this email or contact your account manager.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
 
             # Generate PDF attachment if quotation data is provided
             attachments = []
             temp_file_path = None
+            logo_temp_path = None
+            
+            # Add logo as inline attachment if we have it
+            if logo_attachment_path and os.path.exists(logo_attachment_path):
+                try:
+                    # Determine content type from file extension
+                    ext = os.path.splitext(logo_attachment_path)[1].lower()
+                    content_type_map = {
+                        '.png': 'image/png',
+                        '.jpg': 'image/jpeg',
+                        '.jpeg': 'image/jpeg',
+                        '.gif': 'image/gif'
+                    }
+                    content_type = content_type_map.get(ext, 'image/png')
+                    
+                    # Create inline attachment with CID using dict format (fastapi_mail expects dict for metadata)
+                    logo_attachment = {
+                        "file": logo_attachment_path,
+                        "headers": {
+                            "Content-ID": f"<{logo_cid}>",
+                            "Content-Disposition": "inline"
+                        },
+                        "mime_type": content_type.split('/')[0],
+                        "mime_subtype": content_type.split('/')[1] if '/' in content_type else 'png'
+                    }
+                    attachments.append(logo_attachment)
+                    logo_temp_path = logo_attachment_path
+                    logger.info(f"Added logo as inline attachment with CID: {logo_cid}, content-type: {content_type}")
+                except Exception as e:
+                    logger.warning(f"Failed to add logo as inline attachment: {e}", exc_info=True)
+                    # Continue without inline attachment, will use CID which may not work
+            
             if quotation_data:
                 try:
                     # Use the HTML template (matching QuotePrint.jsx) to generate PDF
@@ -253,7 +629,7 @@ Best regards,
                 subject=subject,
                 recipients=[to_email],
                 body=body,
-                subtype="plain",
+                subtype="html",
                 attachments=attachments if attachments else []
             )
 
@@ -261,13 +637,20 @@ Best regards,
             await self.fastmail.send_message(message)
             logger.info(f"Quotation email sent successfully to {to_email}")
             
-            # Clean up temporary file if it was created
+            # Clean up temporary files if they were created
             if temp_file_path and os.path.exists(temp_file_path):
                 try:
                     os.unlink(temp_file_path)
                     logger.info(f"Cleaned up temporary PDF file: {temp_file_path}")
                 except Exception as e:
-                    logger.warning(f"Failed to clean up temporary file {temp_file_path}: {str(e)}")
+                    logger.warning(f"Failed to clean up temporary PDF file {temp_file_path}: {str(e)}")
+            
+            if logo_temp_path and os.path.exists(logo_temp_path):
+                try:
+                    os.unlink(logo_temp_path)
+                    logger.info(f"Cleaned up temporary logo file: {logo_temp_path}")
+                except Exception as e:
+                    logger.warning(f"Failed to clean up temporary logo file {logo_temp_path}: {str(e)}")
             
             return True
 
@@ -275,13 +658,20 @@ Best regards,
             error_msg = str(e)
             logger.error(f"Failed to send quotation email to {to_email}: {error_msg}")
             
-            # Clean up temporary file if it was created
+            # Clean up temporary files if they were created
             if temp_file_path and os.path.exists(temp_file_path):
                 try:
                     os.unlink(temp_file_path)
                     logger.info(f"Cleaned up temporary PDF file after error: {temp_file_path}")
                 except Exception as cleanup_error:
-                    logger.warning(f"Failed to clean up temporary file {temp_file_path}: {str(cleanup_error)}")
+                    logger.warning(f"Failed to clean up temporary PDF file {temp_file_path}: {str(cleanup_error)}")
+            
+            if logo_temp_path and os.path.exists(logo_temp_path):
+                try:
+                    os.unlink(logo_temp_path)
+                    logger.info(f"Cleaned up temporary logo file after error: {logo_temp_path}")
+                except Exception as cleanup_error:
+                    logger.warning(f"Failed to clean up temporary logo file {logo_temp_path}: {str(cleanup_error)}")
             
             # Provide helpful error messages
             if "Connect call failed" in error_msg:
