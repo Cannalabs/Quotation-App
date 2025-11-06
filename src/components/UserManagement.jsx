@@ -52,6 +52,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 
 export default function UserManagement() {
   const [users, setUsers] = useState([]);
@@ -279,6 +280,17 @@ export default function UserManagement() {
     });
   };
 
+  // Get user initials for avatar
+  const getUserInitials = (fullName) => {
+    if (!fullName) return 'U';
+    const nameParts = fullName.trim().split(/\s+/);
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+    }
+  };
+
   if (isLoading) {
     return (
       <Card className="clay-shadow bg-gradient-to-br from-white/90 to-slate-50/70 border-none rounded-3xl backdrop-blur-sm">
@@ -485,9 +497,18 @@ export default function UserManagement() {
                 <TableRow key={user.id} className="border-none hover:bg-white/50 transition-colors">
                   <TableCell className="px-6 py-4">
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 rounded-xl flex items-center justify-center clay-shadow">
-                        <UserIcon className="w-5 h-5 text-slate-600" />
-                      </div>
+                      <Avatar className="w-10 h-10 border-2 border-slate-200 shrink-0">
+                        {user.profile_picture_url ? (
+                          <AvatarImage 
+                            src={user.profile_picture_url} 
+                            alt={user.full_name}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-gradient-to-br from-slate-100 to-slate-200 text-slate-600 font-semibold text-sm">
+                          {getUserInitials(user.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div>
                         <div className="font-semibold text-slate-800">{user.full_name}</div>
                         <div className="text-sm text-slate-500">ID: {user.id}</div>
@@ -565,9 +586,18 @@ export default function UserManagement() {
                     <TableRow key={user.id} className="border-none hover:bg-white/50 transition-colors">
                       <TableCell className="px-6 py-4">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-gradient-to-br from-red-100 to-red-200 rounded-xl flex items-center justify-center clay-shadow">
-                            <UserIcon className="w-5 h-5 text-red-600" />
-                          </div>
+                          <Avatar className="w-10 h-10 border-2 border-red-200 shrink-0">
+                            {user.profile_picture_url ? (
+                              <AvatarImage 
+                                src={user.profile_picture_url} 
+                                alt={user.full_name}
+                                className="object-cover"
+                              />
+                            ) : null}
+                            <AvatarFallback className="bg-gradient-to-br from-red-100 to-red-200 text-red-600 font-semibold text-sm">
+                              {getUserInitials(user.full_name)}
+                            </AvatarFallback>
+                          </Avatar>
                           <div>
                             <div className="font-semibold text-slate-800">{user.full_name}</div>
                             <div className="text-sm text-slate-500">ID: {user.id}</div>

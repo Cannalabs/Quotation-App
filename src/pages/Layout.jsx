@@ -6,6 +6,7 @@ import { useCompanySettings } from "@/contexts/CompanySettingsContext";
 import { useAuth } from "@/contexts/AuthContext";
 import FaviconUpdater from "@/components/FaviconUpdater";
 import TitleUpdater from "@/components/TitleUpdater";
+import ServerStatus from "@/components/ServerStatus";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -18,6 +19,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
   SidebarProvider,
   SidebarTrigger,
   useSidebar } from
@@ -79,6 +81,17 @@ export default function Layout({ children, currentPageName }) {
   const navigate = useNavigate();
   const { getLogoUrl, companySettings } = useCompanySettings();
   const { logout, user } = useAuth();
+
+  // Get user initials for avatar
+  const getUserInitials = (fullName) => {
+    if (!fullName) return 'U';
+    const nameParts = fullName.trim().split(/\s+/);
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase();
+    } else {
+      return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase();
+    }
+  };
 
   const handleLogout = async () => {
     try {
@@ -181,7 +194,7 @@ export default function Layout({ children, currentPageName }) {
           <Sidebar className="border-none clay-shadow bg-gradient-to-b from-white/80 to-slate-50/80 backdrop-blur-sm">
             <SidebarHeader className="p-6 flex flex-col gap-2 border-none">
               <div className="flex flex-col items-center text-center gap-4">
-                <div className="w-50 h-20  rounded-s clay-shadow flex items-center justify-center p-2">
+                <div className="w-50 h-20  rounded-s flex items-center justify-center p-2">
                   <img
                     src={getLogoUrl()}
                     alt="Company Logo"
@@ -193,41 +206,6 @@ export default function Layout({ children, currentPageName }) {
                   <p className="text-sm text-slate-500 font-medium">{companySettings.company_name || "GROW UNITED ITALY"}</p>
                 </div>
               </div>
-              
-              {/* User Info and Logout */}
-              {user && (
-                <div className="mt-4 p-3 bg-white/60 rounded-lg clay-shadow">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-10 h-10 border-2 border-blue-200">
-                        {user.profile_picture_url ? (
-                          <AvatarImage 
-                            src={user.profile_picture_url} 
-                            alt={user.full_name}
-                            className="object-cover"
-                          />
-                        ) : null}
-                        <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-600">
-                          <UserCircle className="w-5 h-5" />
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="text-left">
-                        <p className="text-sm font-medium text-slate-700">{user.full_name}</p>
-                        <p className="text-xs text-slate-500">{user.email}</p>
-                      </div>
-                    </div>
-                    <Button
-                      onClick={handleLogout}
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600"
-                      title="Logout"
-                    >
-                      <LogOut className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              )}
             </SidebarHeader>
             
             <SidebarContent className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto group-data-[collapsible=icon]:overflow-hidden px-4">
@@ -247,6 +225,44 @@ export default function Layout({ children, currentPageName }) {
                 </SidebarGroupContent>
               </SidebarGroup>
             </SidebarContent>
+            
+            <SidebarFooter className="p-4 border-t border-slate-200/50 flex flex-col gap-3">
+              {/* User Info and Logout */}
+              {user && (
+                <div className="p-3 bg-white/60 rounded-lg clay-shadow">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Avatar className="w-10 h-10 border-2 border-blue-200 shrink-0">
+                        {user.profile_picture_url ? (
+                          <AvatarImage 
+                            src={user.profile_picture_url} 
+                            alt={user.full_name}
+                            className="object-cover"
+                          />
+                        ) : null}
+                        <AvatarFallback className="bg-gradient-to-br from-blue-100 to-blue-200 text-blue-600 font-semibold text-sm">
+                          {getUserInitials(user.full_name)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="text-left min-w-0 flex-1">
+                        <p className="text-sm font-medium text-slate-700 truncate">{user.full_name}</p>
+                        <p className="text-xs text-slate-500 truncate" title={user.email}>{user.email}</p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={handleLogout}
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0 hover:bg-red-100 hover:text-red-600 shrink-0"
+                      title="Logout"
+                    >
+                      <LogOut className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <ServerStatus />
+            </SidebarFooter>
           </Sidebar>
 
           <main className="flex-1 flex flex-col min-w-0">

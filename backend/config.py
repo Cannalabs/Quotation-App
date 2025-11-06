@@ -12,9 +12,6 @@ class Settings(BaseSettings):
         "http://127.0.0.1:5174",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
-        "http://192.168.1.76:5173",
-        "http://192.168.1.76:5174",
-        "http://192.168.1.76:3000"
     ]
     
     # Company defaults
@@ -50,7 +47,8 @@ class Settings(BaseSettings):
     # JWT Authentication configuration
     jwt_secret_key: str = ""  # Should be set via environment variable
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expire_minutes: int = 30 * 24 * 60  # 30 days in minutes
+    jwt_access_token_expire_minutes: int = 15  # Short-lived access token (15 minutes)
+    jwt_refresh_token_expire_days: int = 30  # Long-lived refresh token (30 days)
 
     # Load env from backend/.env.conf regardless of working dir
     model_config = SettingsConfigDict(

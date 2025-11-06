@@ -5,11 +5,14 @@ from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel
 import logging
+from datetime import datetime, timezone
 
 from db import get_session
 from models import User
 from schemas import UserCreate, UserUpdate, UserRead, UserPasswordUpdate, AdminPasswordReset, ForgotPasswordRequest, hash_password, verify_password
-from auth import require_admin_role, create_access_token, get_current_user
+from auth import require_admin_role, create_access_token, create_refresh_token, get_current_user
+from jose import jwt, JWTError
+from config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/users", tags=["users"])
@@ -102,7 +105,8 @@ async def create_user(
         email=user_data.email,
         role=user_data.role,
         profile_picture_url=user_data.profile_picture_url,
-        password_hash=hash_password(user_data.password)
+        password_hash=hash_password(user_data.password),
+        password_changed_at=datetime.now(timezone.utc)  # Set initial password change timestamp
     )
     
     session.add(user)
@@ -198,11 +202,13 @@ async def change_password(
     if not verify_password(password_data.current_password, user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     
-    # Update password
+    # Update password and set password_changed_at timestamp
+    # This will invalidate all existing tokens (user will be logged out from all devices)
     user.password_hash = hash_password(password_data.new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
     await session.commit()
     
-    return {"message": "Password updated successfully"}
+    return {"message": "Password updated successfully. You have been logged out from all devices."}
 
 @router.post("/{user_id}/reset-password", response_model=dict)
 async def admin_reset_password(
@@ -214,11 +220,13 @@ async def admin_reset_password(
     """Admin endpoint to reset any user's password (does not require current password)"""
     user = await _get_user_or_404(session, user_id, active_only=False)
     
-    # Update password (admin doesn't need to know current password)
+    # Update password and set password_changed_at timestamp
+    # This will invalidate all existing tokens (user will be logged out from all devices)
     user.password_hash = hash_password(password_data.new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
     await session.commit()
     
-    return {"message": f"Password has been reset for user {user.email}"}
+    return {"message": f"Password has been reset for user {user.email}. User has been logged out from all devices."}
 
 class LoginRequest(BaseModel):
     email: str
@@ -230,11 +238,12 @@ async def verify_login(
     session: AsyncSession = Depends(get_session),
 ):
     """
-    Verify user login credentials and return JWT access token.
+    Verify user login credentials and return JWT access token and refresh token.
     
     Returns:
         {
             "access_token": "jwt_token_string",
+            "refresh_token": "jwt_refresh_token_string",
             "token_type": "bearer",
             "user": UserRead
         }
@@ -257,18 +266,124 @@ async def verify_login(
     if not verify_password(login_data.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    # Create JWT access token
+    # Create JWT access token (short-lived: 15 minutes)
+    # Include password_changed_at timestamp to invalidate tokens when password changes
     # JWT 'sub' (subject) must be a string according to JWT spec
-    access_token = create_access_token(data={"sub": str(user.id), "email": user.email, "role": user.role})
+    password_changed_timestamp = int(user.password_changed_at.timestamp()) if user.password_changed_at else None
+    token_data = {
+        "sub": str(user.id),
+        "email": user.email,
+        "role": user.role,
+        "pwd_changed": password_changed_timestamp  # Include password change timestamp
+    }
+    access_token = create_access_token(data=token_data)
+    
+    # Create JWT refresh token (long-lived: 30 days)
+    refresh_token = create_refresh_token(data=token_data)
     
     # Convert user to UserRead schema to exclude password_hash
     user_read = UserRead.model_validate(user)
     
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "user": user_read
     }
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
+
+@router.post("/refresh-token")
+async def refresh_token(
+    request: RefreshTokenRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Refresh access token using a valid refresh token.
+    
+    Returns:
+        {
+            "access_token": "new_jwt_token_string",
+            "token_type": "bearer"
+        }
+    """
+    # Security check: prevent token validation with empty/insecure secret
+    if not settings.jwt_secret_key or settings.jwt_secret_key == "your-secret-key-change-in-production":
+        raise HTTPException(
+            status_code=500,
+            detail="Server configuration error: JWT secret key is not configured"
+        )
+    
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Invalid refresh token",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    
+    try:
+        # Decode and validate refresh token
+        payload = jwt.decode(request.refresh_token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
+        
+        # Verify it's a refresh token
+        token_type = payload.get("type")
+        if token_type != "refresh":
+            raise credentials_exception
+        
+        # Extract user ID
+        user_id_str: str = payload.get("sub")
+        if user_id_str is None:
+            raise credentials_exception
+        
+        # Convert string back to int for database lookup
+        try:
+            user_id: int = int(user_id_str)
+        except (ValueError, TypeError):
+            raise credentials_exception
+        
+        # Verify user exists and is active
+        result = await session.execute(select(User).where(User.id == user_id, User.is_active == True))
+        user = result.scalar_one_or_none()
+        
+        if user is None:
+            raise credentials_exception
+        
+        # Validate password hasn't changed since refresh token was issued
+        # Get password_changed_at from refresh token (if present)
+        token_pwd_changed = payload.get("pwd_changed")
+        
+        # If password was changed after refresh token was issued, invalidate it
+        if token_pwd_changed is not None:
+            if user.password_changed_at is None:
+                # User has password_changed_at set but token doesn't, or vice versa
+                # This means password was changed and all old tokens should be invalid
+                raise credentials_exception
+            
+            user_pwd_changed_timestamp = int(user.password_changed_at.timestamp())
+            if token_pwd_changed != user_pwd_changed_timestamp:
+                # Password was changed after refresh token was issued - invalidate token
+                raise credentials_exception
+        elif user.password_changed_at is not None:
+            # Token doesn't have pwd_changed but user does - token is old, invalidate it
+            raise credentials_exception
+        
+        # Generate new access token with current password_changed_at timestamp
+        password_changed_timestamp = int(user.password_changed_at.timestamp()) if user.password_changed_at else None
+        token_data = {
+            "sub": str(user.id),
+            "email": user.email,
+            "role": user.role,
+            "pwd_changed": password_changed_timestamp
+        }
+        access_token = create_access_token(data=token_data)
+        
+        return {
+            "access_token": access_token,
+            "token_type": "bearer"
+        }
+        
+    except JWTError:
+        raise credentials_exception
 
 @router.post("/forgot-password", response_model=dict)
 async def forgot_password(

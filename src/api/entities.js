@@ -205,9 +205,12 @@ export const User = {
       localStorage.setItem(USER_KEY, JSON.stringify(userData));
       return userData;
     } catch (error) {
-      // If API fails (user might not exist anymore), clear localStorage
+      // If API fails (401/403 means token invalid, password changed, etc.), clear everything
       console.warn('Failed to fetch user from database, clearing session:', error);
+      // Clear all auth data
       localStorage.removeItem(USER_KEY);
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       return null;
     }
   },

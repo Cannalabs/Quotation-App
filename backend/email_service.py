@@ -1,6 +1,7 @@
 from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from typing import List, Optional, Dict, Any
 from config import settings
+from encryption import decrypt_email_password
 import logging
 import tempfile
 import os
@@ -38,9 +39,18 @@ class EmailService:
                     result = await session.execute(select(EmailSettings).limit(1))
                     email_settings = result.scalars().first()
                     if email_settings and email_settings.mail_from and email_settings.mail_server:
+                        # Decrypt password before using
+                        decrypted_password = ""
+                        if email_settings.mail_password:
+                            try:
+                                decrypted_password = decrypt_email_password(email_settings.mail_password)
+                            except Exception as e:
+                                logger.warning(f"Failed to decrypt email password: {e}")
+                                decrypted_password = ""  # Will cause authentication to fail, which is safer
+                        
                         return {
                             'mail_username': email_settings.mail_username,
-                            'mail_password': email_settings.mail_password,
+                            'mail_password': decrypted_password,
                             'mail_from': email_settings.mail_from,
                             'mail_from_name': email_settings.mail_from_name,
                             'mail_port': email_settings.mail_port,
@@ -141,9 +151,18 @@ class EmailService:
                 result = await session.execute(select(EmailSettings).limit(1))
                 email_settings = result.scalars().first()
                 if email_settings and email_settings.mail_from and email_settings.mail_server:
+                    # Decrypt password before using
+                    decrypted_password = ""
+                    if email_settings.mail_password:
+                        try:
+                            decrypted_password = decrypt_email_password(email_settings.mail_password)
+                        except Exception as e:
+                            logger.warning(f"Failed to decrypt email password: {e}")
+                            decrypted_password = ""  # Will cause authentication to fail, which is safer
+                    
                     email_config = {
                         'mail_username': email_settings.mail_username,
-                        'mail_password': email_settings.mail_password,
+                        'mail_password': decrypted_password,
                         'mail_from': email_settings.mail_from,
                         'mail_from_name': email_settings.mail_from_name,
                         'mail_port': email_settings.mail_port,

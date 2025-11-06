@@ -23,6 +23,7 @@ from exception_handlers import (
     http_exception_handler,
     general_exception_handler
 )
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -94,6 +95,29 @@ def hello_root(name: str = "world"):
 @app.get("/items/{item_id}")
 def read_item_root(item_id: int, q: str | None = None):
     return {"item_id": item_id, "query": q}
+
+# Health check endpoint (no authentication required)
+@app.get("/api/health")
+async def health_check():
+    """
+    Health check endpoint to verify server is running.
+    Returns server status and current timestamp.
+    """
+    try:
+        # Simple database connectivity check
+        from sqlalchemy import text
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        logger.warning(f"Database health check failed: {e}")
+        db_status = "disconnected"
+    
+    return {
+        "status": "up" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
 
 # API test routes
 @app.get("/api/")

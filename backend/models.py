@@ -125,6 +125,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(50), default="user")  # admin, manager, user
     profile_picture_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # For future authentication
+    password_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # Track password changes to invalidate tokens
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -169,7 +170,7 @@ class EmailSettings(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     mail_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    mail_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Store encrypted or plain (consider encryption in production)
+    mail_password: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Stored encrypted using Fernet symmetric encryption
     mail_from: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     mail_from_name: Mapped[str] = mapped_column(String(255), default="Grow United Italy")
     mail_port: Mapped[int] = mapped_column(default=587)

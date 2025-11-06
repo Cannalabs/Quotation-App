@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { User } from "@/api/entities";
-import { UploadFile } from "@/api/integrations";
+import { UploadFile, apiPost } from "@/api/integrations";
 import { CONFIG } from "@/config/constants";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,27 +160,22 @@ export default function MyAccount() {
     setMessage({ type: "", text: "" });
 
     try {
-      const response = await fetch(`${CONFIG.API_BASE_URL}/api/users/${currentUser.id}/change-password`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          current_password: passwordData.current_password,
-          new_password: passwordData.new_password
-        })
+      const result = await apiPost(`/api/users/${currentUser.id}/change-password`, {
+        current_password: passwordData.current_password,
+        new_password: passwordData.new_password
       });
 
-      if (response.ok) {
-        setMessage({ type: "success", text: "Password updated successfully!" });
-        setPasswordData({ current_password: "", new_password: "", confirm_password: "" });
-        setShowPasswordForm(false);
-      } else {
-        const errorData = await response.json();
-        setMessage({ type: "error", text: errorData.detail || "Failed to update password" });
-      }
+      setMessage({ type: "success", text: result.message || "Password updated successfully! You have been logged out from all devices." });
+      setPasswordData({ current_password: "", new_password: "", confirm_password: "" });
+      setShowPasswordForm(false);
+      
+      // After password change, user will be logged out due to token invalidation
+      // Redirect to login after a short delay
+      setTimeout(() => {
+        logout();
+      }, 2000);
     } catch (error) {
-      setMessage({ type: "error", text: "Failed to update password" });
+      setMessage({ type: "error", text: error.message || "Failed to update password" });
     } finally {
       setIsChangingPassword(false);
     }

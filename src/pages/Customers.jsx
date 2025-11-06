@@ -99,7 +99,33 @@ export default function Customers() {
   };
 
   const handleBulkExport = () => {
-    console.log('Export customers:', selectedCustomers);
+    if (selectedCustomers.length === 0) {
+      setMessage({ type: "error", text: "Please select at least one customer to export" });
+      setTimeout(() => setMessage({ type: "", text: "" }), 3000);
+      return;
+    }
+
+    // Get selected customers data
+    const selectedCustomersData = filteredCustomers.filter(c => selectedCustomers.includes(c.id));
+    
+    const headers = ['ID', 'Company Name', 'Contact Person', 'Email', 'Phone', 'Country'];
+    const csvContent = [
+      headers.join(','),
+      ...selectedCustomersData.map(customer => [
+        customer.id || '',
+        `"${customer.company_name || ''}"`,
+        `"${customer.contact_person || ''}"`,
+        customer.email || '',
+        customer.phone || '',
+        customer.country || ''
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `customers_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
   };
 
   const handleSort = (field) => {

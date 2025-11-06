@@ -30,17 +30,92 @@ export default function FilteredQuotesList({ quotes, title, subtitle, onClose })
     }
   };
 
+  const formatDateForCSV = (dateString) => {
+    if (!dateString) return '';
+    try {
+      const date = parseISO(dateString) || new Date(dateString);
+      return format(date, "yyyy-MM-dd");
+    } catch {
+      return '';
+    }
+  };
+
   const exportToCSV = () => {
-    const headers = ['Quote Number', 'Customer', 'Status', 'Date', 'Total Value'];
+    const headers = [
+      'Quote ID', 'Quote Number', 'Quote Date', 'Valid Until', 'Quote Status',
+      'Customer ID', 'Customer Name', 'Contact Person', 'Customer Email', 'Customer Phone', 'Customer Country',
+      'Discount Type', 'Discount Value', 'Subtotal', 'Total VAT', 'Total',
+      'Product ID', 'Product Name', 'Product SKU', 'Product Category',
+      'Item Description', 'Quantity', 'Unit Price', 'VAT Rate', 'Line Total', 'Line Total VAT',
+      'Notes'
+    ];
+    
+    const rows = [];
+    
+    quotes.forEach(quote => {
+      const customer = quote.customer_data || quote.customer || {};
+      const quoteBaseData = [
+        quote.id || '',
+        quote.quotation_number || '',
+        formatDateForCSV(quote.created_date || quote.created_at),
+        formatDateForCSV(quote.valid_until),
+        quote.status || '',
+        quote.customer_id || customer.id || '',
+        `"${quote.customer_name || customer.name || customer.company_name || ''}"`,
+        `"${quote.customer_contact_person || customer.contact_person || ''}"`,
+        quote.customer_email || customer.email || '',
+        quote.customer_phone || customer.phone || '',
+        customer.country || '',
+        quote.discount_type || 'none',
+        (quote.discount_value || 0).toFixed(2),
+        (quote.subtotal || 0).toFixed(2),
+        (quote.total_vat || 0).toFixed(2),
+        (quote.total || quote.total_amount || 0).toFixed(2)
+      ];
+      
+      const items = quote.items || [];
+      
+      if (items.length === 0) {
+        // If no items, still add one row with quote info
+        rows.push([
+          ...quoteBaseData,
+          '', // Product ID
+          '', // Product Name
+          '', // Product SKU
+          '', // Product Category
+          '', // Item Description
+          '', // Quantity
+          '', // Unit Price
+          '', // VAT Rate
+          '', // Line Total
+          '', // Line Total VAT
+          `"${(quote.notes || '').replace(/"/g, '""')}"` // Notes
+        ].join(','));
+      } else {
+        // Add one row per item
+        items.forEach((item, index) => {
+          const product = item.product || item.product_data || {};
+          rows.push([
+            ...quoteBaseData,
+            item.product_id || product.id || '',
+            `"${(product.name || item.description || '').replace(/"/g, '""')}"`,
+            product.sku || '',
+            product.category || '',
+            `"${(item.description || '').replace(/"/g, '""')}"`,
+            (item.quantity || 0).toFixed(2),
+            (item.unit_price || 0).toFixed(2),
+            (item.vat_rate || 0).toFixed(2),
+            (item.line_total || 0).toFixed(2),
+            (item.line_total_vat || 0).toFixed(2),
+            index === 0 ? `"${(quote.notes || '').replace(/"/g, '""')}"` : '' // Notes only on first row
+          ].join(','));
+        });
+      }
+    });
+    
     const csvContent = [
       headers.join(','),
-      ...quotes.map(quote => [
-        quote.quotation_number || '',
-        `"${quote.customer_name || quote.customer_data?.company_name || ''}"`,
-        quote.status || '',
-        formatDate(quote.created_date),
-        (quote.total || quote.total_amount || 0).toFixed(2)
-      ].join(','))
+      ...rows
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

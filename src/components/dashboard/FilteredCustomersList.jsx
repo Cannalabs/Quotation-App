@@ -28,10 +28,11 @@ export default function FilteredCustomersList({ title, subtitle, onClose }) {
   };
 
   const exportToCSV = () => {
-    const headers = ['Company Name', 'Contact Person', 'Email', 'Phone', 'Country'];
+    const headers = ['ID', 'Company Name', 'Contact Person', 'Email', 'Phone', 'Country'];
     const csvContent = [
       headers.join(','),
       ...customers.map(customer => [
+        customer.id || '',
         `"${customer.company_name || ''}"`,
         `"${customer.contact_person || ''}"`,
         customer.email || '',

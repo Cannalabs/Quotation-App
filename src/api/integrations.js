@@ -24,6 +24,49 @@ function getAccessToken() {
   }
 }
 
+// Helper function to refresh access token
+async function refreshAccessToken() {
+  try {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      return null;
+    }
+    
+    const response = await fetch(`${BASE_URL}/api/users/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const { access_token } = data;
+      if (access_token) {
+        localStorage.setItem('access_token', access_token);
+        return access_token;
+      }
+    } else {
+      // Refresh token invalid, expired, or password changed - clear everything
+      // This happens when password was changed on another device
+      localStorage.removeItem('current_user');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      // Trigger a page reload or redirect to login if needed
+      // The error will be caught by the calling function
+    }
+    return null;
+  } catch (error) {
+    console.error('Token refresh failed:', error);
+    // Clear tokens on error (e.g., password changed)
+    localStorage.removeItem('current_user');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+    return null;
+  }
+}
+
 // Helper function to build headers with JWT token
 function getHeaders() {
   const headers = { "Content-Type": "application/json" };
@@ -44,15 +87,30 @@ export async function apiGet(path) {
     console.warn(`API GET ${path} - No token found, request may fail`);
   }
   
-  const res = await fetch(`${BASE_URL}${path}`, { 
+  let res = await fetch(`${BASE_URL}${path}`, { 
     credentials: "include",
     headers,
   });
+  
+  // If 401 Unauthorized, try to refresh token and retry once
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry request with new token
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(`${BASE_URL}${path}`, { 
+        credentials: "include",
+        headers,
+      });
+    }
+  }
+  
   if (!res.ok) {
     // Handle 401 Unauthorized or 403 Forbidden - token expired, invalid, or missing
     if (res.status === 401 || res.status === 403) {
       console.warn(`${res.status} ${res.status === 401 ? 'Unauthorized' : 'Forbidden'} for ${path} - clearing tokens`);
       localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('current_user');
       // Redirect to login will be handled by ProtectedRoute component
     }
@@ -62,16 +120,36 @@ export async function apiGet(path) {
 }
 
 export async function apiPost(path, body) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const headers = getHeaders();
+  const token = getAccessToken();
+  
+  let res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
+  
+  // If 401 Unauthorized, try to refresh token and retry once
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry request with new token
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(`${BASE_URL}${path}`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+    }
+  }
+  
   if (!res.ok) {
     // Handle 401 Unauthorized or 403 Forbidden - token expired, invalid, or missing
     if (res.status === 401 || res.status === 403) {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('current_user');
     }
     const errorData = await res.json().catch(() => ({}));
@@ -106,16 +184,36 @@ export async function apiPost(path, body) {
 }
 
 export async function apiPut(path, body) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const headers = getHeaders();
+  const token = getAccessToken();
+  
+  let res = await fetch(`${BASE_URL}${path}`, {
     method: "PUT",
-    headers: getHeaders(),
+    headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
+  
+  // If 401 Unauthorized, try to refresh token and retry once
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry request with new token
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(`${BASE_URL}${path}`, {
+        method: "PUT",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(body),
+      });
+    }
+  }
+  
   if (!res.ok) {
     // Handle 401 Unauthorized or 403 Forbidden - token expired, invalid, or missing
     if (res.status === 401 || res.status === 403) {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('current_user');
     }
     const errorData = await res.json().catch(() => ({}));
@@ -151,15 +249,33 @@ export async function apiPut(path, body) {
 
 export async function apiDelete(path) {
   const headers = getHeaders();
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const token = getAccessToken();
+  
+  let res = await fetch(`${BASE_URL}${path}`, {
     method: "DELETE",
     headers,
     credentials: "include",
   });
+  
+  // If 401 Unauthorized, try to refresh token and retry once
+  if (res.status === 401 && token) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      // Retry request with new token
+      headers["Authorization"] = `Bearer ${newToken}`;
+      res = await fetch(`${BASE_URL}${path}`, {
+        method: "DELETE",
+        headers,
+        credentials: "include",
+      });
+    }
+  }
+  
   if (!res.ok) {
     // Handle 401 Unauthorized or 403 Forbidden - token expired, invalid, or missing
     if (res.status === 401 || res.status === 403) {
       localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
       localStorage.removeItem('current_user');
     }
     throw new Error(`DELETE ${path} ${res.status}`);

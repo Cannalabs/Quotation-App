@@ -30,10 +30,11 @@ export default function FilteredProductsList({ title, subtitle, onClose }) {
   };
 
   const exportToCSV = () => {
-    const headers = ['Product Name', 'SKU', 'Category', 'Price', 'Currency', 'Status'];
+    const headers = ['ID', 'Product Name', 'SKU', 'Category', 'Price', 'Currency', 'Status'];
     const csvContent = [
       headers.join(','),
       ...products.map(product => [
+        product.id || '',
         `"${product.name || ''}"`,
         product.sku || '',
         product.category || '',

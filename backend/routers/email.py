@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db import get_session
 from models import EmailSettings, User
 from schemas import EmailSettingsRead, EmailSettingsUpdate
+from encryption import encrypt_email_password, decrypt_email_password
 
 router = APIRouter(prefix="/api/email", tags=["email"])
 
@@ -25,8 +26,8 @@ async def _get_or_create_email_settings(session: AsyncSession, use_lock: bool = 
     
     if use_lock:
         try:
-            # Try to acquire advisory lock
-            await session.execute(text(f"SELECT pg_advisory_xact_lock({lock_id})"))
+            # Try to acquire advisory lock (using parameterized query for safety)
+            await session.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
             result = await session.execute(select(EmailSettings).limit(1).with_for_update(skip_locked=False))
             email_settings = result.scalars().first()
             
@@ -97,8 +98,17 @@ def _update_email_settings_fields(email_settings: EmailSettings, request: EmailC
     email_settings.mail_from = request.mail_from.strip()
     
     # Update password if provided, otherwise keep existing
+    # Encrypt password before storing in database
     if request.mail_password and request.mail_password.strip():
-        email_settings.mail_password = request.mail_password.strip()
+        encrypted_password = encrypt_email_password(request.mail_password.strip())
+        if encrypted_password:
+            email_settings.mail_password = encrypted_password
+        else:
+            # If encryption fails, log error but don't save (security: never store plain text)
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error("Failed to encrypt email password, not saving")
+            raise HTTPException(status_code=500, detail="Failed to encrypt email password")
     
     # Optional fields with defaults
     email_settings.mail_from_name = (
@@ -213,16 +223,21 @@ async def save_email_config(
     All required fields must be provided: mail_server, mail_username, mail_password, mail_from
     Uses database-level locking to prevent race conditions.
     """
-    # Use advisory lock to prevent race condition
+    # Use advisory lock to prevent race condition (PostgreSQL only)
     lock_id = 123456  # Fixed ID for email settings singleton
     
     try:
-        # Acquire advisory lock to prevent concurrent modifications
-        # This ensures only one request can create/update email settings at a time
-        await session.execute(text(f"SELECT pg_advisory_xact_lock({lock_id})"))
+        # Try to acquire advisory lock (PostgreSQL only, will fail gracefully on SQLite)
+        # Using parameterized query for safety
+        try:
+            await session.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": lock_id})
+            use_lock = True
+        except Exception:
+            # SQLite or other databases that don't support advisory locks
+            use_lock = False
         
-        # Get existing email settings - advisory lock prevents race condition
-        email_settings = await _get_or_create_email_settings(session, use_lock=True)
+        # Get existing email settings
+        email_settings = await _get_or_create_email_settings(session, use_lock=use_lock)
         existing_password = email_settings.mail_password
         
         # Validate required fields
@@ -244,7 +259,7 @@ async def save_email_config(
                 detail=f"Missing required fields: {', '.join(missing_fields)}. Please fill in all required fields before saving."
             )
         
-        # Email settings already retrieved above with lock
+        # Email settings already retrieved above
         
         # Update fields from request - all required fields are validated above
         _update_email_settings_fields(email_settings, request)
@@ -286,6 +301,10 @@ async def save_email_config(
             }
         }
         
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 400 validation errors)
+        await session.rollback()
+        raise
     except Exception as e:
         await session.rollback()
         # Let the centralized exception handler deal with unexpected errors
