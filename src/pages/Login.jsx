@@ -24,6 +24,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import loginBackground from '@/assets/photo_2025-11-11_15-56-31.jpg';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -46,9 +47,9 @@ export default function Login() {
     }
   }, [isAuthenticated, navigate]);
 
-  // Load company logo from database (public endpoint - no auth required)
+  // Load company logo and name from database (public endpoint - no auth required)
   useEffect(() => {
-    const loadCompanyLogo = async () => {
+    const loadCompanyInfo = async () => {
       try {
         const publicInfo = await CompanySettings.getPublic();
         if (publicInfo.logo_url) {
@@ -58,11 +59,10 @@ export default function Login() {
           setCompanyName(publicInfo.company_name);
         }
       } catch (error) {
-        console.warn('Failed to load company logo:', error);
-        // Keep default logo if loading fails
+        console.warn('Failed to load company info:', error);
       }
     };
-    loadCompanyLogo();
+    loadCompanyInfo();
   }, []);
 
   const handleInputChange = (e) => {
@@ -108,8 +108,16 @@ export default function Login() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#e6f5f4' }}>
-        <div className="flex items-center space-x-2">
+      <div 
+        className="min-h-screen flex items-center justify-center"
+        style={{
+          backgroundImage: `url(${loginBackground})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat'
+        }}
+      >
+        <div className="flex items-center space-x-2 bg-white/90 px-4 py-2 rounded-lg shadow-lg">
           <Loader2 className="h-6 w-6 animate-spin" />
           <span>Loading...</span>
         </div>
@@ -118,54 +126,79 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8" style={{ backgroundColor: '#e6f5f4' }}>
-      <div className="max-w-md w-full space-y-8">
-        {/* Header */}
-        <div className="text-center">
-          <div className="flex justify-center mb-4">
-            {companyLogo ? (
-              <img
-                src={companyLogo}
-                alt="Company Logo"
-                className="h-24 w-auto object-contain max-w-xs"
-                onError={(e) => {
-                  // Fallback to icon if image fails to load
-                  setCompanyLogo(null);
-                }}
-              />
-            ) : (
-              <div className="flex items-center justify-center">
-                <Building2 className="h-12 w-12 text-blue-600" />
-              </div>
-            )}
+    <div 
+      className="min-h-screen flex items-center justify-center py-8 sm:py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden"
+      style={{
+        backgroundImage: `url(${loginBackground})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
+    >
+      {/* Enhanced overlay with gradient */}
+      <div className="absolute inset-0 bg-gradient-to-br from-black/40 via-black/30 to-black/40"></div>
+      
+      {/* Decorative elements */}
+      <div className="absolute top-0 left-0 w-72 h-72 bg-teal-500/10 rounded-full blur-3xl"></div>
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-green-500/10 rounded-full blur-3xl"></div>
+      
+      {/* Logo at the very top */}
+      <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-20">
+        {companyLogo ? (
+          <div className="relative">
+            <div className="absolute inset-0 bg-white/20 rounded-full blur-xl"></div>
+            <img
+              src={companyLogo}
+              alt="Company Logo"
+              className="w-auto object-contain max-w-xs relative z-10 drop-shadow-lg"
+              style={{ height: '8rem' }}
+              onError={(e) => {
+                setCompanyLogo(null);
+              }}
+            />
           </div>
-          <h2 className="mt-6 text-2xl sm:text-3xl font-bold text-gray-900">
-            Welcome Back
-          </h2>
-          <p className="mt-2 text-xs sm:text-sm text-gray-600">
-            Sign in to {companyName}
-          </p>
+        ) : (
+          <div className="relative">
+            <div className="absolute inset-0 bg-teal-500/20 rounded-full blur-xl"></div>
+            <div className="flex items-center justify-center relative z-10 bg-white/10 backdrop-blur-sm p-3 sm:p-4 rounded-full border border-white/20">
+              <Building2 className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
+            </div>
+          </div>
+        )}
+      </div>
+      
+      <div className="max-w-md w-full space-y-6 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        {/* Header with enhanced styling */}
+        <div className="text-center space-y-4">
+          <div className="space-y-2">
+            <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-lg">
+              Welcome Back
+            </h2>
+            <p className="text-sm sm:text-base text-white/90 font-medium">
+              Sign in to Quotation App
+            </p>
+          </div>
         </div>
 
-        {/* Login Form */}
-        <Card className="shadow-xl">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">Sign In</CardTitle>
+        {/* Login Form with glassmorphism effect */}
+        <Card className="shadow-2xl border-0 bg-white/95 backdrop-blur-md">
+          <CardHeader className="space-y-1 pb-4">
+            <CardTitle className="text-2xl font-semibold text-center text-gray-800">Sign In</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <form onSubmit={handleSubmit} className="space-y-4">
+          <CardContent className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email Field */}
               <div className="space-y-2">
-                <Label htmlFor="email">Email Address</Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Label htmlFor="email" className="text-gray-700 font-medium">Email Address</Label>
+                <div className="relative group">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-teal-600 transition-colors" />
                   <Input
                     id="email"
                     name="email"
                     type="email"
                     value={formData.email}
                     onChange={handleInputChange}
-                    className="pl-10"
+                    className="pl-10 h-11 border-gray-300 focus:border-teal-500 focus:ring-teal-500 transition-all"
                     placeholder="Enter your email"
                     required
                   />
@@ -174,49 +207,49 @@ export default function Login() {
 
               {/* Password Field */}
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                <Label htmlFor="password" className="text-gray-700 font-medium">Password</Label>
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 group-focus-within:text-teal-600 transition-colors" />
                   <Input
                     id="password"
                     name="password"
                     type={showPassword ? 'text' : 'password'}
                     value={formData.password}
                     onChange={handleInputChange}
-                    className="pl-10 pr-10"
+                    className="pl-10 pr-10 h-11 border-gray-300 focus:border-teal-500 focus:ring-teal-500 transition-all"
                     placeholder="Enter your password"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-teal-600 transition-colors"
                   >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
 
-              {/* Forgot Password Link */}
-              <div className="text-right">
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                  Forgot your password?
-                </button>
-              </div>
+                {/* Forgot Password Link */}
+                <div className="text-right pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(true)}
+                    className="text-sm text-teal-600 hover:text-teal-700 font-medium hover:underline transition-all"
+                  >
+                    Forgot your password?
+                  </button>
+                </div>
               </div>
 
               {/* Error/Success Messages */}
               {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
+                <Alert variant="destructive" className="border-red-200 bg-red-50 animate-in slide-in-from-top-2">
+                  <AlertDescription className="text-red-800">{error}</AlertDescription>
                 </Alert>
               )}
               
               {success && (
-                <Alert className="border-green-200 bg-green-50">
+                <Alert className="border-green-200 bg-green-50 animate-in slide-in-from-top-2">
                   <AlertDescription className="text-green-800">{success}</AlertDescription>
                 </Alert>
               )}
@@ -224,18 +257,17 @@ export default function Login() {
               {/* Submit Button */}
               <Button
                 type="submit"
-                className="w-full hover:opacity-90 transition-opacity"
+                className="w-full h-11 text-base font-semibold bg-gradient-to-r from-teal-600 to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white shadow-lg hover:shadow-xl transition-all duration-200 disabled:opacity-50"
                 disabled={isLoggingIn}
-                style={{ backgroundColor: '#006a65', color: 'white' }}
               >
                 {isLoggingIn ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Signing In...
                   </>
                 ) : (
                   <>
-                    <LogIn className="mr-2 h-4 w-4" />
+                    <LogIn className="mr-2 h-5 w-5" />
                     Sign In
                   </>
                 )}
@@ -246,9 +278,9 @@ export default function Login() {
         </Card>
 
         {/* Footer */}
-        <div className="text-center text-sm text-gray-600">
-          <p>Quotation Management System</p>
-          <p className="mt-1">Secure • Reliable • Professional</p>
+        <div className="text-center text-sm text-white/80 space-y-1">
+          <p className="font-medium">Quotation Management System</p>
+          <p className="text-xs">Secure • Reliable • Professional</p>
         </div>
       </div>
 
