@@ -172,11 +172,11 @@ export default function Login() {
         <div className="text-center space-y-4">
           <div className="space-y-2">
             <h2 className="text-3xl sm:text-4xl font-bold text-white drop-shadow-lg">
-              Welcome Back
+              Quotation Application
             </h2>
-            <p className="text-sm sm:text-base text-white/90 font-medium">
+            {/* <p className="text-sm sm:text-base text-white/90 font-medium">
               Sign in to Quotation App
-            </p>
+            </p> */}
           </div>
         </div>
 
