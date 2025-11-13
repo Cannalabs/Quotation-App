@@ -9,6 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+import {
   Upload,
   Search,
   Package,
@@ -61,31 +70,24 @@ export default function Products() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [productsToRestore, setProductsToRestore] = useState([]);
   const [isRestoring, setIsRestoring] = useState(false);
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalArchivedCount, setTotalArchivedCount] = useState(0);
+  const [totalDeletedCount, setTotalDeletedCount] = useState(0);
 
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [activeTab, currentPage, searchTerm]);
 
   useEffect(() => {
-    let productsToFilter;
-    if (activeTab === 'active') {
-      productsToFilter = products;
-    } else if (activeTab === 'archived') {
-      productsToFilter = archivedProducts;
-    } else if (activeTab === 'deleted') {
-      productsToFilter = deletedProducts;
-    }
-    
-    const filtered = productsToFilter.filter(product =>
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (product.category && product.category.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-    setFilteredProducts(filtered);
-  }, [products, archivedProducts, deletedProducts, searchTerm, activeTab]);
+    // Reset to page 1 when tab or search changes
+    setCurrentPage(1);
+  }, [activeTab, searchTerm]);
 
   useEffect(() => {
     localStorage.setItem('products-view', viewMode);
@@ -94,18 +96,78 @@ export default function Products() {
   const loadProducts = async () => {
     setIsLoading(true);
     try {
-      // Load active products (non-deleted, non-archived)
-      const activeData = await Product.list("-created_date");
-      const active = activeData.filter(p => !p.archived);
-      setProducts(active);
+      const skip = (currentPage - 1) * itemsPerPage;
       
-      // Load archived products (non-deleted, archived)
-      const archived = activeData.filter(p => p.archived);
-      setArchivedProducts(archived);
-      
-      // Load deleted products separately
-      const deletedData = await Product.listDeleted();
-      setDeletedProducts(deletedData);
+      if (activeTab === 'active') {
+        // Load active products with pagination
+        const searchQuery = searchTerm ? searchTerm : undefined;
+        const activeData = await Product.list({ 
+          sort: "-created_date", 
+          limit: itemsPerPage, 
+          skip: skip,
+          q: searchQuery,
+          includeDeleted: false 
+        });
+        const active = activeData.filter(p => !p.archived && !p.deleted);
+        setProducts(active);
+        setFilteredProducts(active);
+        
+        // Get total count for active products (fetch first page to estimate, or implement count endpoint)
+        if (currentPage === 1 && !searchQuery) {
+          // Fetch a larger sample to estimate total
+          const sampleData = await Product.list({ 
+            sort: "-created_date", 
+            limit: 1000, 
+            skip: 0,
+            includeDeleted: false 
+          });
+          const activeSample = sampleData.filter(p => !p.archived && !p.deleted);
+          setTotalCount(activeSample.length >= 1000 ? activeSample.length + 1 : activeSample.length);
+        } else {
+          // For search or subsequent pages, estimate based on current data
+          setTotalCount(active.length >= itemsPerPage ? (currentPage * itemsPerPage) + 1 : (currentPage - 1) * itemsPerPage + active.length);
+        }
+      } else if (activeTab === 'archived') {
+        // Load archived products with pagination
+        const searchQuery = searchTerm ? searchTerm : undefined;
+        const activeData = await Product.list({ 
+          sort: "-created_date", 
+          limit: itemsPerPage, 
+          skip: skip,
+          q: searchQuery,
+          includeDeleted: false 
+        });
+        const archived = activeData.filter(p => p.archived && !p.deleted);
+        setArchivedProducts(archived);
+        setFilteredProducts(archived);
+        
+        if (currentPage === 1 && !searchQuery) {
+          const sampleData = await Product.list({ 
+            sort: "-created_date", 
+            limit: 1000, 
+            skip: 0,
+            includeDeleted: false 
+          });
+          const archivedSample = sampleData.filter(p => p.archived && !p.deleted);
+          setTotalArchivedCount(archivedSample.length >= 1000 ? archivedSample.length + 1 : archivedSample.length);
+        } else {
+          setTotalArchivedCount(archived.length >= itemsPerPage ? (currentPage * itemsPerPage) + 1 : (currentPage - 1) * itemsPerPage + archived.length);
+        }
+      } else if (activeTab === 'deleted') {
+        // Load deleted products (no pagination on backend yet, but we'll paginate client-side)
+        const deletedData = await Product.listDeleted();
+        const filtered = searchTerm 
+          ? deletedData.filter(p => 
+              p.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+              p.sku?.toLowerCase().includes(searchTerm.toLowerCase())
+            )
+          : deletedData;
+        
+        const paginated = filtered.slice(skip, skip + itemsPerPage);
+        setDeletedProducts(paginated);
+        setFilteredProducts(paginated);
+        setTotalDeletedCount(filtered.length);
+      }
     } catch (error) {
       setMessage({ type: "error", text: "Failed to load products" });
     } finally {
@@ -381,6 +443,95 @@ export default function Products() {
     }
   };
 
+  const getTotalPages = () => {
+    const total = activeTab === 'active' ? totalCount : activeTab === 'archived' ? totalArchivedCount : totalDeletedCount;
+    return Math.ceil(total / itemsPerPage);
+  };
+
+  const renderPagination = () => {
+    const totalPages = getTotalPages();
+    if (totalPages <= 1) return null;
+
+    const pages = [];
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    return (
+      <div className="mt-6 flex justify-center">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {startPage > 1 && (
+              <>
+                <PaginationItem>
+                  <PaginationLink
+                    onClick={() => setCurrentPage(1)}
+                    className="cursor-pointer"
+                  >
+                    1
+                  </PaginationLink>
+                </PaginationItem>
+                {startPage > 2 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+              </>
+            )}
+            
+            {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map((page) => (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  onClick={() => setCurrentPage(page)}
+                  isActive={page === currentPage}
+                  className="cursor-pointer"
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            
+            {endPage < totalPages && (
+              <>
+                {endPage < totalPages - 1 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+                <PaginationItem>
+                  <PaginationLink
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="cursor-pointer"
+                  >
+                    {totalPages}
+                  </PaginationLink>
+                </PaginationItem>
+              </>
+            )}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
+  };
+
   return (
     <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
@@ -447,21 +598,21 @@ export default function Products() {
               <Package className="w-4 h-4 mr-2" />
               Active Products
               <Badge className="ml-2 bg-blue-100 text-blue-700">
-                {products.length}
+                {totalCount || products.length}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="archived" className="rounded-xl">
               <Archive className="w-4 h-4 mr-2" />
               Archived
               <Badge className="ml-2 bg-orange-100 text-orange-700">
-                {archivedProducts.length}
+                {totalArchivedCount || archivedProducts.length}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="deleted" className="rounded-xl">
               <AlertCircle className="w-4 h-4 mr-2" />
               Trash
               <Badge className="ml-2 bg-red-100 text-red-700">
-                {deletedProducts.length}
+                {totalDeletedCount || deletedProducts.length}
               </Badge>
             </TabsTrigger>
           </TabsList>
@@ -474,7 +625,7 @@ export default function Products() {
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-800">
-                  {activeTab === 'active' ? products.length : activeTab === 'archived' ? archivedProducts.length : deletedProducts.length}
+                  {activeTab === 'active' ? (totalCount || products.length) : activeTab === 'archived' ? (totalArchivedCount || archivedProducts.length) : (totalDeletedCount || deletedProducts.length)}
                 </p>
                 <p className="text-slate-600 text-sm">
                   {activeTab === 'active' ? 'Active' : activeTab === 'archived' ? 'Archived' : 'Deleted'} Products
@@ -616,6 +767,7 @@ export default function Products() {
                 user={user}
               />
             )}
+            {renderPagination()}
           </TabsContent>
 
           <TabsContent value="archived">
@@ -659,6 +811,7 @@ export default function Products() {
                 user={user}
               />
             )}
+            {renderPagination()}
           </TabsContent>
 
           <TabsContent value="deleted">
@@ -700,6 +853,7 @@ export default function Products() {
                 user={user}
               />
             )}
+            {renderPagination()}
           </TabsContent>
         </Tabs>
 

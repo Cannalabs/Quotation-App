@@ -3,6 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { Product } from "@/api/entities";
 import { X, Package, Download, Edit, Euro } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -11,22 +20,134 @@ import { createPageUrl } from "@/utils";
 export default function FilteredProductsList({ title, subtitle, onClose }) {
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(50);
+  const [totalCount, setTotalCount] = useState(0);
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [currentPage]);
 
   const loadProducts = async () => {
+    setIsLoading(true);
     try {
-      const allProducts = await Product.list("-created_date");
+      const skip = (currentPage - 1) * itemsPerPage;
+      // Fetch products with pagination
+      const allProducts = await Product.list({ 
+        sort: "-created_date", 
+        limit: itemsPerPage, 
+        skip: skip,
+        includeDeleted: false 
+      });
       // Filter only active (non-archived) products
-      const activeProducts = allProducts.filter(p => !p.is_archived);
+      const activeProducts = allProducts.filter(p => !p.is_archived && !p.deleted);
       setProducts(activeProducts);
+      
+      // Estimate total count on first page
+      if (currentPage === 1) {
+        const sampleData = await Product.list({ 
+          sort: "-created_date", 
+          limit: 1000, 
+          skip: 0,
+          includeDeleted: false 
+        });
+        const activeSample = sampleData.filter(p => !p.is_archived && !p.deleted);
+        setTotalCount(activeSample.length >= 1000 ? activeSample.length + 1 : activeSample.length);
+      } else {
+        setTotalCount(activeProducts.length >= itemsPerPage ? (currentPage * itemsPerPage) + 1 : (currentPage - 1) * itemsPerPage + activeProducts.length);
+      }
     } catch (error) {
       console.error("Error loading products:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const getTotalPages = () => {
+    return Math.ceil(totalCount / itemsPerPage);
+  };
+
+  const renderPagination = () => {
+    const totalPages = getTotalPages();
+    if (totalPages <= 1) return null;
+
+    const maxVisiblePages = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+    
+    if (endPage - startPage < maxVisiblePages - 1) {
+      startPage = Math.max(1, endPage - maxVisiblePages + 1);
+    }
+
+    return (
+      <div className="mt-4 flex justify-center">
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {startPage > 1 && (
+              <>
+                <PaginationItem>
+                  <PaginationLink
+                    onClick={() => setCurrentPage(1)}
+                    className="cursor-pointer"
+                  >
+                    1
+                  </PaginationLink>
+                </PaginationItem>
+                {startPage > 2 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+              </>
+            )}
+            
+            {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map((page) => (
+              <PaginationItem key={page}>
+                <PaginationLink
+                  onClick={() => setCurrentPage(page)}
+                  isActive={page === currentPage}
+                  className="cursor-pointer"
+                >
+                  {page}
+                </PaginationLink>
+              </PaginationItem>
+            ))}
+            
+            {endPage < totalPages && (
+              <>
+                {endPage < totalPages - 1 && (
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                )}
+                <PaginationItem>
+                  <PaginationLink
+                    onClick={() => setCurrentPage(totalPages)}
+                    className="cursor-pointer"
+                  >
+                    {totalPages}
+                  </PaginationLink>
+                </PaginationItem>
+              </>
+            )}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
   };
 
   const exportToCSV = () => {
@@ -55,8 +176,8 @@ export default function FilteredProductsList({ title, subtitle, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="clay-shadow bg-white border-none rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between pb-4 border-b">
+      <Card className="clay-shadow bg-white border-none rounded-3xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 border-b flex-shrink-0">
           <div>
             <CardTitle className="text-2xl font-bold text-slate-800 flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center">
@@ -82,14 +203,14 @@ export default function FilteredProductsList({ title, subtitle, onClose }) {
           </div>
         </CardHeader>
 
-        <CardContent className="p-6 overflow-y-auto">
+        <CardContent className="p-6 overflow-y-auto flex-1 min-h-0">
           {/* Summary */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <Card className="clay-inset bg-gradient-to-r from-orange-50 to-orange-100 border-none rounded-2xl">
               <CardContent className="p-4">
                 <div>
                   <p className="text-sm text-orange-600 font-medium">Total Active Products</p>
-                  <p className="text-2xl font-bold text-orange-800">{products.length}</p>
+                  <p className="text-2xl font-bold text-orange-800">{totalCount || products.length}</p>
                 </div>
               </CardContent>
             </Card>
@@ -171,6 +292,7 @@ export default function FilteredProductsList({ title, subtitle, onClose }) {
               </Table>
             </Card>
           )}
+          {renderPagination()}
         </CardContent>
       </Card>
     </div>

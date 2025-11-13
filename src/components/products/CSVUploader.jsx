@@ -67,7 +67,8 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
     setResults(null);
 
     try {
-      const allProducts = await Product.list();
+      // Fetch all products (use a high limit to get all products)
+      const allProducts = await Product.list({ limit: 10000, includeDeleted: false });
       const productSkuMap = new Map(allProducts.map(p => [p.sku, p]));
       
       const text = await file.text();
@@ -135,16 +136,36 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
         setProgress(((i) / totalRows) * 100);
       }
 
+      // Calculate progress allocation: 80% for parsing, 20% for DB operations
+      const totalDbOps = productsToCreate.length + productsToUpdate.length;
+      
+      // Create products with progress tracking
       if (productsToCreate.length > 0) {
-        for (const product of productsToCreate) {
-          await Product.create(product);
+        const createProgressAllocation = totalDbOps > 0 
+          ? (productsToCreate.length / totalDbOps) * 20 
+          : 0;
+        for (let i = 0; i < productsToCreate.length; i++) {
+          await Product.create(productsToCreate[i]);
+          const creationProgress = 80 + ((i + 1) / productsToCreate.length) * createProgressAllocation;
+          setProgress(creationProgress);
         }
       }
+      // Update products with progress tracking
       if (productsToUpdate.length > 0) {
-        for (const p of productsToUpdate) {
-          await Product.update(p.id, p.data);
+        const updateProgressAllocation = totalDbOps > 0 
+          ? (productsToUpdate.length / totalDbOps) * 20 
+          : 0;
+        const startProgress = totalDbOps > 0 
+          ? 80 + (productsToCreate.length / totalDbOps) * 20 
+          : 80;
+        for (let i = 0; i < productsToUpdate.length; i++) {
+          await Product.update(productsToUpdate[i].id, productsToUpdate[i].data);
+          const updateProgress = startProgress + ((i + 1) / productsToUpdate.length) * updateProgressAllocation;
+          setProgress(updateProgress);
         }
       }
+      
+      setProgress(100);
 
       setResults({
         created: productsToCreate.length,

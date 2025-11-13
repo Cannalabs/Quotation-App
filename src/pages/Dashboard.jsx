@@ -63,7 +63,7 @@ export default function Dashboard() {
       const [allQuotes, allCustomers, allProducts] = await Promise.all([
         Quotation.list("-created_date"),
         Customer.list(),
-        Product.list()
+        Product.list({ limit: 10000, includeDeleted: false })
       ]);
 
       // Filter out archived and deleted quotes from dashboard calculations
