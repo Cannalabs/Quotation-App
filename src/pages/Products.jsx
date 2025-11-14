@@ -61,6 +61,7 @@ export default function Products() {
   const [showRestoreDialog, setShowRestoreDialog] = useState(false);
   const [productsToRestore, setProductsToRestore] = useState([]);
   const [isRestoring, setIsRestoring] = useState(false);
+  const [uploadResults, setUploadResults] = useState(null); // Store detailed upload results
 
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -134,11 +135,28 @@ export default function Products() {
     }
   };
 
-  const handleUploadComplete = (uploadedCount) => {
-    setMessage({ type: "success", text: `Successfully uploaded ${uploadedCount} products` });
+  const handleUploadComplete = (results) => {
+    // Handle both old format (number) and new format (object)
+    const total = typeof results === 'number' ? results : results.total;
+    const created = typeof results === 'object' ? results.created : 0;
+    const updated = typeof results === 'object' ? results.updated : 0;
+    
+    setMessage({ 
+      type: "success", 
+      text: `Successfully processed ${total} products (${created} created, ${updated} updated)` 
+    });
+    
+    // Store detailed results for display
+    if (typeof results === 'object') {
+      setUploadResults(results);
+    }
+    
     setShowUploader(false);
     loadProducts();
-    setTimeout(() => setMessage({ type: "", text: "" }), 5000);
+    setTimeout(() => {
+      setMessage({ type: "", text: "" });
+      setUploadResults(null); // Clear results after 10 seconds
+    }, 10000);
   };
 
   const handleEdit = (product) => {
@@ -384,15 +402,15 @@ export default function Products() {
 
   return (
     <div className="p-4 sm:p-6 bg-gradient-to-br from-slate-50 via-purple-50 to-blue-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-6">
           <div>
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-2">Product Catalog</h1>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-800 mb-3">Product Catalog</h1>
             <p className="text-slate-600 text-sm sm:text-base md:text-lg">Manage your product inventory and pricing</p>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full md:w-auto">
+          <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 w-full md:w-auto">
             <Button
               onClick={() => setShowUploader(!showUploader)}
               className="clay-button bg-gradient-to-r from-green-100 to-green-200 text-green-700 border-none rounded-2xl hover:from-green-200 hover:to-green-300"
@@ -421,6 +439,44 @@ export default function Products() {
           </Alert>
         )}
 
+        {/* Upload Results Details */}
+        {uploadResults && (
+          <div className="space-y-6">
+            {/* Existing Products Info */}
+            {uploadResults.infoMessages && uploadResults.infoMessages.length > 0 && (
+              <Alert className="clay-shadow border-none rounded-2xl bg-blue-50/60">
+                <Check className="h-4 w-4 text-blue-700" />
+                <AlertDescription>
+                  <div className="font-medium text-blue-800 mb-4">
+                    Existing Products ({uploadResults.infoMessages.length}) - These products were updated:
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {uploadResults.infoMessages.map((info, idx) => (
+                        <div key={idx} className="text-sm text-slate-700 bg-white/60 rounded-lg p-3 border border-blue-200/50">
+                          <span className="font-medium text-blue-700">Row {info.row}:</span> SKU <span className="font-semibold">{info.sku || 'Unknown'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Errors if any */}
+            {uploadResults.errors > 0 && (
+              <Alert className="clay-shadow border-none rounded-2xl bg-orange-50/60">
+                <AlertCircle className="h-4 w-4 text-orange-700" />
+                <AlertDescription>
+                  <div className="font-medium text-orange-800">
+                    {uploadResults.errors} error(s) occurred during import. Check CSV uploader for details.
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+          </div>
+        )}
+
         {/* CSV Uploader */}
         {showUploader && (
           <CSVUploader
@@ -442,8 +498,8 @@ export default function Products() {
         )}
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="clay-shadow bg-white/80 border-none rounded-2xl">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+          <TabsList className="clay-shadow bg-white/80 border-none rounded-2xl mb-6">
             <TabsTrigger value="active" className="rounded-xl">
               <Package className="w-4 h-4 mr-2" />
               Active Products
@@ -468,16 +524,16 @@ export default function Products() {
           </TabsList>
 
           {/* Stats & Controls */}
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mt-6 mb-6">
             <div className="flex items-center gap-6">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center clay-shadow">
-                <Package className="w-6 h-6 text-blue-700" />
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center clay-shadow">
+                <Package className="w-7 h-7 text-blue-700" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-slate-800">
+                <p className="text-3xl font-bold text-slate-800 mb-1">
                   {activeTab === 'active' ? products.length : activeTab === 'archived' ? archivedProducts.length : deletedProducts.length}
                 </p>
-                <p className="text-slate-600 text-sm">
+                <p className="text-slate-600 text-base">
                   {activeTab === 'active' ? 'Active' : activeTab === 'archived' ? 'Archived' : 'Deleted'} Products
                 </p>
               </div>
@@ -500,7 +556,7 @@ export default function Products() {
 
           {/* Bulk Actions */}
           {selectedProducts.length > 0 && (
-            <div className="flex items-center gap-2 p-4 bg-blue-50/60 clay-shadow rounded-2xl border-2 border-blue-200/50">
+            <div className="flex items-center gap-3 p-5 bg-blue-50/60 clay-shadow rounded-2xl border-2 border-blue-200/50 mb-6">
               <Badge className="bg-blue-100 text-blue-700 border-none rounded-full px-3 py-1">
                 {selectedProducts.length} selected
               </Badge>
@@ -575,17 +631,6 @@ export default function Products() {
           )}
 
           <TabsContent value="active">
-            {/* Select All */}
-            {filteredProducts.length > 0 && (
-              <div className="flex items-center gap-2 mb-4">
-                <Checkbox 
-                  checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm text-slate-600">Select all on page</span>
-              </div>
-            )}
-
             {/* Products Display */}
             {viewMode === 'grid' ? (
               <ProductGrid
@@ -620,17 +665,6 @@ export default function Products() {
           </TabsContent>
 
           <TabsContent value="archived">
-            {/* Select All */}
-            {filteredProducts.length > 0 && (
-              <div className="flex items-center gap-2 mb-4">
-                <Checkbox 
-                  checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm text-slate-600">Select all on page</span>
-              </div>
-            )}
-
             {/* Products Display */}
             {viewMode === 'grid' ? (
               <ProductGrid
@@ -663,17 +697,6 @@ export default function Products() {
           </TabsContent>
 
           <TabsContent value="deleted">
-            {/* Select All */}
-            {filteredProducts.length > 0 && (
-              <div className="flex items-center gap-2 mb-4">
-                <Checkbox 
-                  checked={selectedProducts.length === filteredProducts.length && filteredProducts.length > 0}
-                  onCheckedChange={handleSelectAll}
-                />
-                <span className="text-sm text-slate-600">Select all on page</span>
-              </div>
-            )}
-
             {/* Products Display */}
             {viewMode === 'grid' ? (
               <ProductGrid

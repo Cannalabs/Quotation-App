@@ -58,6 +58,45 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
     URL.revokeObjectURL(url);
   };
 
+  // Helper function to parse CSV line with proper handling of quoted fields
+  const parseCSVLine = (line) => {
+    const values = [];
+    let current = '';
+    let insideQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (insideQuotes && line[i + 1] === '"') {
+          // Escaped quote (double quote)
+          current += '"';
+          i++; // Skip next quote
+        } else {
+          // Toggle quote state
+          insideQuotes = !insideQuotes;
+        }
+      } else if (char === ',' && !insideQuotes) {
+        // Field separator (only when not inside quotes)
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    
+    // Add the last field
+    values.push(current.trim());
+    
+    // Remove surrounding quotes from each field
+    return values.map(v => {
+      if (v.startsWith('"') && v.endsWith('"')) {
+        return v.slice(1, -1).replace(/""/g, '"');
+      }
+      return v;
+    });
+  };
+
   const processCSV = async () => {
     if (!file) return;
 
@@ -78,8 +117,8 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
         throw new Error("CSV file must contain a header and at least one data row.");
       }
 
-      const headerLine = lines[0].toLowerCase();
-      const headers = headerLine.replace(/^\uFEFF/, '').split(',').map(h => h.trim().replace(/"/g, ''));
+      const headerLine = lines[0].replace(/^\uFEFF/, ''); // Remove BOM if present
+      const headers = parseCSVLine(headerLine).map(h => h.toLowerCase().trim());
       
       const requiredHeaders = ['productcode', 'productdescription', 'price'];
       const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
@@ -90,19 +129,17 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
       const productsToCreate = [];
       const productsToUpdate = [];
       const processingErrors = [];
+      const infoMessages = []; // Track informational messages (existing products)
       const totalRows = lines.length - 1;
+      // Track SKUs processed in this CSV to prevent duplicates within the file
+      const csvProcessedSkus = new Map(); // Map<sku, firstRowNumber>
 
       for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim().replace(/(^"|"$)/g, ''));
-        
-        if (values.length > headers.length) {
-            // handle comma in last field
-            const lastField = values.slice(headers.length - 1).join(',');
-            values.splice(headers.length - 1, values.length, lastField);
-        }
+        // Parse CSV line properly handling quoted fields with commas
+        const values = parseCSVLine(lines[i]);
 
         const rowData = headers.reduce((obj, header, index) => {
-          obj[header] = values[index];
+          obj[header] = values[index] || '';
           return obj;
         }, {});
         
@@ -117,10 +154,25 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
           continue;
         }
 
+        const sku = rowData.productcode.trim();
+        
+        // Check for duplicate SKU within the CSV file
+        if (csvProcessedSkus.has(sku)) {
+          const firstRow = csvProcessedSkus.get(sku);
+          processingErrors.push({ 
+            row: i + 1, 
+            message: `Duplicate SKU '${sku}' found. First occurrence at row ${firstRow}. This row will be skipped.` 
+          });
+          continue;
+        }
+        
+        // Mark this SKU as processed
+        csvProcessedSkus.set(sku, i + 1);
+
         const payload = {
           name: rowData.productdescription,
           description: rowData.productdescription,
-          sku: rowData.productcode,
+          sku: sku,
           unit_price: price,
           category: rowData['product category'] || "",
           is_active: true,
@@ -130,6 +182,13 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
         if (productSkuMap.has(payload.sku)) {
           const existingProduct = productSkuMap.get(payload.sku);
           productsToUpdate.push({ id: existingProduct.id, data: payload });
+          // Add informational message that product already exists
+          infoMessages.push({ 
+            row: i + 1, 
+            sku: sku,
+            message: `Product with SKU '${sku}' already exists. Will be updated.`,
+            type: 'info'
+          });
         } else {
           productsToCreate.push(payload);
         }
@@ -171,11 +230,18 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
         created: productsToCreate.length,
         updated: productsToUpdate.length,
         errors: processingErrors.length,
-        errorDetails: processingErrors
+        errorDetails: processingErrors,
+        infoMessages: infoMessages // Include informational messages about existing products
       });
 
       if (productsToCreate.length > 0 || productsToUpdate.length > 0) {
-        onUploadComplete(productsToCreate.length + productsToUpdate.length);
+        onUploadComplete({
+          total: productsToCreate.length + productsToUpdate.length,
+          created: productsToCreate.length,
+          updated: productsToUpdate.length,
+          errors: processingErrors.length,
+          infoMessages: infoMessages
+        });
       }
 
     } catch (err) {
@@ -286,21 +352,67 @@ export default function CSVUploader({ onUploadComplete, onCancel }) {
         )}
 
         {results && (
-          <Alert className={`clay-shadow border-none rounded-2xl ${results.errors > 0 ? 'bg-orange-50/60' : 'bg-green-50/60'}`}>
-            {results.errors === 0 ? <Check className="h-4 w-4 text-green-700" /> : <AlertCircle className="h-4 w-4 text-orange-700" />}
-            <AlertDescription>
-              <div className="font-medium text-slate-800">
-                Import complete. Created: {results.created}, Updated: {results.updated}, Skipped: {results.errors}.
-              </div>
-              {results.errors > 0 && (
-                <div className="mt-2">
-                  <Button onClick={downloadErrorLog} size="sm" variant="link" className="text-blue-600 p-0 h-auto">
-                    Download error log
-                  </Button>
+          <>
+            <Alert className={`clay-shadow border-none rounded-2xl ${results.errors > 0 ? 'bg-orange-50/60' : 'bg-green-50/60'}`}>
+              {results.errors === 0 ? <Check className="h-4 w-4 text-green-700" /> : <AlertCircle className="h-4 w-4 text-orange-700" />}
+              <AlertDescription>
+                <div className="font-medium text-slate-800">
+                  Import complete. Created: {results.created}, Updated: {results.updated}, Skipped: {results.errors}.
                 </div>
-              )}
-            </AlertDescription>
-          </Alert>
+                {results.errors > 0 && (
+                  <div className="mt-2">
+                    <Button onClick={downloadErrorLog} size="sm" variant="link" className="text-blue-600 p-0 h-auto">
+                      Download error log
+                    </Button>
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
+
+            {/* Display existing products info */}
+            {results.infoMessages && results.infoMessages.length > 0 && (
+              <div className="clay-inset bg-blue-50/40 border-none rounded-2xl p-4 max-h-64 overflow-y-auto">
+                <div className="flex items-center gap-2 mb-3">
+                  <Check className="h-4 w-4 text-blue-700" />
+                  <h4 className="font-semibold text-blue-800">Existing Products ({results.infoMessages.length})</h4>
+                </div>
+                <div className="space-y-2">
+                  {results.infoMessages.slice(0, 10).map((info, idx) => (
+                    <div key={idx} className="text-sm text-slate-700 bg-white/60 rounded-lg p-2">
+                      <span className="font-medium text-blue-700">Row {info.row}:</span> {info.message}
+                    </div>
+                  ))}
+                  {results.infoMessages.length > 10 && (
+                    <div className="text-sm text-slate-600 italic">
+                      ... and {results.infoMessages.length - 10} more existing product(s).
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Display error details including duplicates */}
+            {results.errors > 0 && results.errorDetails && results.errorDetails.length > 0 && (
+              <div className="clay-inset bg-orange-50/40 border-none rounded-2xl p-4 max-h-64 overflow-y-auto">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4 text-orange-700" />
+                  <h4 className="font-semibold text-orange-800">Errors & Warnings ({results.errorDetails.length})</h4>
+                </div>
+                <div className="space-y-2">
+                  {results.errorDetails.slice(0, 10).map((err, idx) => (
+                    <div key={idx} className="text-sm text-slate-700 bg-white/60 rounded-lg p-2">
+                      <span className="font-medium text-orange-700">Row {err.row}:</span> {err.message}
+                    </div>
+                  ))}
+                  {results.errorDetails.length > 10 && (
+                    <div className="text-sm text-slate-600 italic">
+                      ... and {results.errorDetails.length - 10} more error(s). Download error log to see all.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         <div className="flex justify-end gap-3">

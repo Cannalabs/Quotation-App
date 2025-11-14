@@ -61,12 +61,13 @@ export default function ProductGrid({
     <>
       {/* Select All Header */}
       {onSelectAll && (
-        <div className="flex items-center gap-2 mb-4">
+        <div className="flex items-center gap-3 mb-6">
           <Checkbox
             checked={selectedProducts.length === products.length && products.length > 0}
             onCheckedChange={onSelectAll}
+            className="w-5 h-5"
           />
-          <span className="text-sm text-slate-600">Select all on page ({products.length})</span>
+          <span className="text-base font-medium text-slate-700">Select all on page ({products.length})</span>
         </div>
       )}
 
