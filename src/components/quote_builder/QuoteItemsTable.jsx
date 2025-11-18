@@ -8,6 +8,23 @@ import { Package, Trash2, Plus } from "lucide-react";
 
 export default function QuoteItemsTable({ products, quoteItems, setQuoteItems }) {
   const [showProductSearch, setShowProductSearch] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Filter active products (not archived, not deleted)
+  const activeProducts = products.filter((product) => 
+    !product.is_archived && !product.deleted
+  );
+
+  // Further filter by search term if provided
+  const filteredProducts = searchTerm.trim() 
+    ? activeProducts.filter((product) => {
+        const searchLower = searchTerm.toLowerCase();
+        return (
+          product.name?.toLowerCase().includes(searchLower) ||
+          product.sku?.toLowerCase().includes(searchLower)
+        );
+      })
+    : activeProducts;
 
   const addProduct = (product) => {
     const existingItem = quoteItems.find(item => item.id === product.id);
@@ -86,12 +103,24 @@ export default function QuoteItemsTable({ products, quoteItems, setQuoteItems })
             </Button>
           ) : (
             <Command className="clay-inset bg-white/60 rounded-2xl">
-              <CommandInput placeholder="Search product..." />
-              <CommandList>
-                <CommandEmpty>No product found.</CommandEmpty>
-                {products.map((product) => (
-                  <CommandItem key={product.id} onSelect={() => addProduct(product)} className="cursor-pointer">
-                    {product.name}
+              <CommandInput 
+                placeholder="Search product..." 
+                value={searchTerm}
+                onValueChange={setSearchTerm}
+              />
+              <CommandList className="max-h-96 overflow-y-auto">
+                <CommandEmpty>No active products found.</CommandEmpty>
+                {filteredProducts.map((product) => (
+                  <CommandItem key={product.id} onSelect={() => {
+                    addProduct(product);
+                    setSearchTerm("");
+                  }} className="cursor-pointer">
+                    <div className="flex flex-col">
+                      <span className="font-semibold">{product.name}</span>
+                      <span className="text-sm text-slate-500">
+                        {product.sku} • €{product.unit_price?.toFixed(2)}
+                      </span>
+                    </div>
                   </CommandItem>
                 ))}
               </CommandList>

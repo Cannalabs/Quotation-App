@@ -45,7 +45,7 @@ export default function Customers() {
   const loadCustomers = async () => {
     setIsLoading(true);
     try {
-      const data = await Customer.list("-created_date");
+      const data = await Customer.list({ sort: "-created_date", limit: 10000 });
       setCustomers(data);
     } catch (error) {
       setMessage({ type: "error", text: "Failed to load customers" });

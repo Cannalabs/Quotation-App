@@ -17,7 +17,7 @@ export default function FilteredCustomersList({ title, subtitle, onClose }) {
 
   const loadCustomers = async () => {
     try {
-      const allCustomers = await Customer.list("-created_date");
+      const allCustomers = await Customer.list({ sort: "-created_date", limit: 10000 });
       // For now, all customers are considered "active" - you can add filtering logic here
       setCustomers(allCustomers);
     } catch (error) {

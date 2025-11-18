@@ -53,11 +53,20 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
     setLineItems(lineItems.filter((_, i) => i !== index));
   };
 
-  const filteredProducts = products.filter((product) =>
-  !product.is_archived && (
-  product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  product.sku.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProducts = products.filter((product) => {
+    // Exclude archived and deleted products
+    if (product.is_archived || product.deleted) return false;
+    
+    // If no search term, show all active products
+    if (!searchTerm.trim()) return true;
+    
+    // Filter by search term (name or SKU)
+    const searchLower = searchTerm.toLowerCase();
+    return (
+      product.name?.toLowerCase().includes(searchLower) ||
+      product.sku?.toLowerCase().includes(searchLower)
+    );
+  });
 
   return (
     <Card className="clay-shadow bg-gradient-to-br from-white/90 to-slate-50/70 border-none rounded-3xl backdrop-blur-sm w-full min-w-0">
@@ -294,7 +303,7 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                       onValueChange={setSearchTerm}
                     />
                   </div>
-                  <CommandList className="max-h-64">
+                  <CommandList className="max-h-96 overflow-y-auto">
                     <CommandEmpty>No active products found.</CommandEmpty>
                     <CommandGroup>
                       {filteredProducts.map((product) => (

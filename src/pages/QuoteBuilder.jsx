@@ -119,8 +119,8 @@ export default function QuoteBuilder() {
       setOriginalQuoteData(quote); // Store the original quote data
       setQuoteId(id); // Ensure quoteId state is set for existing quotes
       const [customersData, productsData] = await Promise.all([
-      Customer.list("-created_date"),
-      Product.list("-created_date")]
+      Customer.list({ sort: "-created_date", limit: 10000 }),
+      Product.list({ sort: "-created_date", limit: 10000, includeDeleted: false })]
       );
       setCustomers(customersData);
       setProducts(productsData);
@@ -206,7 +206,7 @@ export default function QuoteBuilder() {
     try {
       const [customersData, productsData] = await Promise.all([
       Customer.list("-created_date"),
-      Product.list("-created_date")]
+      Product.list({ sort: "-created_date", limit: 10000, includeDeleted: false })]
       );
       setCustomers(customersData);
       setProducts(productsData);
