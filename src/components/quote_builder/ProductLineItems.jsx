@@ -47,9 +47,9 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
     else if (field === 'unit_price') {
       updatedItems[index][field] = (value === '' || value == null || value === '.') ? 0 : Math.max(0, parseFloat(value) || 0);
     }
-    // Ensure vat_rate is an integer between 0 and 100 or null/empty (no decimals allowed)
+    // Ensure vat_rate is a number between 0 and 100 or null/empty (allows decimals when typed)
     else if (field === 'vat_rate') {
-      updatedItems[index][field] = (value === '' || value == null) ? null : Math.min(100, Math.max(0, parseInt(value, 10) || 0));
+      updatedItems[index][field] = (value === '' || value == null) ? null : Math.min(100, Math.max(0, parseFloat(value) || 0));
     }
     else {
       updatedItems[index][field] = value;
@@ -177,16 +177,13 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                     value={item.vat_rate != null ? String(item.vat_rate) : ''}
                     onChange={(e) => {
                       const inputVal = e.target.value;
-                      // Prevent decimal input - only allow whole numbers
-                      if (inputVal.includes('.')) {
-                        return;
-                      }
-                      if (inputVal === '') {
+                      // Allow decimal input when typing, but step="1" ensures arrows increment by whole numbers
+                      if (inputVal === '' || inputVal === '.') {
                         const updatedItems = [...lineItems];
-                        updatedItems[index].vat_rate = '';
+                        updatedItems[index].vat_rate = inputVal;
                         setLineItems(updatedItems);
                       } else {
-                        const val = parseInt(inputVal, 10);
+                        const val = parseFloat(inputVal);
                         if (!isNaN(val) && val >= 0 && val <= 100) {
                           updateLineItem(index, 'vat_rate', val);
                         }
@@ -194,10 +191,10 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                     }}
                     onBlur={(e) => {
                       const inputVal = e.target.value;
-                      if (inputVal === '') {
+                      if (inputVal === '' || inputVal === '.') {
                         updateLineItem(index, 'vat_rate', null);
                       } else {
-                        const val = parseInt(inputVal, 10);
+                        const val = parseFloat(inputVal);
                         if (isNaN(val) || val < 0 || val > 100) {
                           updateLineItem(index, 'vat_rate', null);
                         } else {
@@ -310,16 +307,13 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                         value={item.vat_rate != null ? String(item.vat_rate) : ''}
                         onChange={(e) => {
                           const inputVal = e.target.value;
-                          // Prevent decimal input - only allow whole numbers
-                          if (inputVal.includes('.')) {
-                            return;
-                          }
-                          if (inputVal === '') {
+                          // Allow decimal input when typing, but step="1" ensures arrows increment by whole numbers
+                          if (inputVal === '' || inputVal === '.') {
                             const updatedItems = [...lineItems];
-                            updatedItems[index].vat_rate = '';
+                            updatedItems[index].vat_rate = inputVal;
                             setLineItems(updatedItems);
                           } else {
-                            const val = parseInt(inputVal, 10);
+                            const val = parseFloat(inputVal);
                             if (!isNaN(val) && val >= 0 && val <= 100) {
                               updateLineItem(index, 'vat_rate', val);
                             }
@@ -327,10 +321,10 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                         }}
                         onBlur={(e) => {
                           const inputVal = e.target.value;
-                          if (inputVal === '') {
+                          if (inputVal === '' || inputVal === '.') {
                             updateLineItem(index, 'vat_rate', null);
                           } else {
-                            const val = parseInt(inputVal, 10);
+                            const val = parseFloat(inputVal);
                             if (isNaN(val) || val < 0 || val > 100) {
                               updateLineItem(index, 'vat_rate', null);
                             } else {

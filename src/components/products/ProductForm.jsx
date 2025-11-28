@@ -131,7 +131,7 @@ export default function ProductForm({ product, onSave, onCancel }) {
               <Label className="text-slate-700 font-medium">VAT Rate (%)</Label>
               <Input
                 type="number"
-                step="0.1"
+                step="1"
                 min="0"
                 max="100"
                 value={formData.vat_rate}
