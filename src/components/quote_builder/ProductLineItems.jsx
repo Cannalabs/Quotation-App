@@ -171,13 +171,13 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                   <label className="text-xs text-slate-600 mb-1 block">VAT Rate (%)</label>
                   <Input
                     type="number"
-                    step="1"
+                    step="any"
                     min="0"
                     max="100"
                     value={item.vat_rate != null ? String(item.vat_rate) : ''}
                     onChange={(e) => {
                       const inputVal = e.target.value;
-                      // Allow decimal input when typing, but step="1" ensures arrows increment by whole numbers
+                      // Allow decimal input when typing, but step="any" allows decimals while arrows increment by 1
                       if (inputVal === '' || inputVal === '.') {
                         const updatedItems = [...lineItems];
                         updatedItems[index].vat_rate = inputVal;
@@ -301,13 +301,13 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                     <td className="p-2 align-middle" style={{ width: '12%' }}>
                       <Input
                         type="number"
-                        step="1"
+                        step="any"
                         min="0"
                         max="100"
                         value={item.vat_rate != null ? String(item.vat_rate) : ''}
                         onChange={(e) => {
                           const inputVal = e.target.value;
-                          // Allow decimal input when typing, but step="1" ensures arrows increment by whole numbers
+                          // Allow decimal input when typing, but step="any" allows decimals while arrows increment by 1
                           if (inputVal === '' || inputVal === '.') {
                             const updatedItems = [...lineItems];
                             updatedItems[index].vat_rate = inputVal;
