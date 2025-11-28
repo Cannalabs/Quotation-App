@@ -16,6 +16,7 @@ export default function ProductForm({ product, onSave, onCancel }) {
     unit_price: product?.unit_price || "",
     currency: product?.currency || "EUR",
     category: product?.category || "",
+    vat_rate: product?.vat_rate || "",
     is_active: product?.is_active !== false
   });
 
@@ -24,7 +25,8 @@ export default function ProductForm({ product, onSave, onCancel }) {
     
     const productData = {
       ...formData,
-      unit_price: parseFloat(formData.unit_price) || 0
+      unit_price: parseFloat(formData.unit_price) || 0,
+      vat_rate: formData.vat_rate !== "" ? parseFloat(formData.vat_rate) || 0 : 0
     };
     
     onSave(productData);
@@ -84,7 +86,7 @@ export default function ProductForm({ product, onSave, onCancel }) {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label className="text-slate-700 font-medium">Unit Price</Label>
               <Input
@@ -112,7 +114,9 @@ export default function ProductForm({ product, onSave, onCancel }) {
                 </SelectContent>
               </Select>
             </div>
-            
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
               <Label className="text-slate-700 font-medium">Category</Label>
               <Input
@@ -121,6 +125,21 @@ export default function ProductForm({ product, onSave, onCancel }) {
                 className="clay-inset bg-white/60 border-none rounded-2xl h-12"
                 placeholder="Product category"
               />
+            </div>
+            
+            <div className="space-y-2">
+              <Label className="text-slate-700 font-medium">VAT Rate (%)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0"
+                max="100"
+                value={formData.vat_rate}
+                onChange={(e) => handleChange("vat_rate", e.target.value)}
+                className="clay-inset bg-white/60 border-none rounded-2xl h-12"
+                placeholder="Leave empty to use company default"
+              />
+              <p className="text-xs text-slate-500">Leave empty to use company default VAT rate</p>
             </div>
           </div>
 

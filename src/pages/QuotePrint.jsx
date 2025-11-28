@@ -84,6 +84,14 @@ export default function QuotePrint() {
 
   if (status === 'success' && quoteData) {
     const { company_settings, customer, items, totals, currency = 'EUR', discount, notes } = quoteData;
+    const defaultVatRate = company_settings?.default_vat_rate || 4;
+    
+    // Split items into chunks of 10 per page
+    const itemsPerPage = 10;
+    const itemPages = [];
+    for (let i = 0; i < items.length; i += itemsPerPage) {
+      itemPages.push(items.slice(i, i + itemsPerPage));
+    }
     
     return (
       <>
@@ -94,6 +102,19 @@ export default function QuotePrint() {
           @page { 
             size: A4; 
             margin: 0;
+            margin-bottom: 0; /* Footer is inside page, no margin needed */
+          }
+          
+          @page :first {
+            margin-bottom: 0;
+          }
+          
+          @page :left {
+            margin-bottom: 0; 
+          }
+          
+          @page :right {
+            margin-bottom: 0;
           }
           
           body { 
@@ -113,6 +134,7 @@ export default function QuotePrint() {
             display: flex;
             flex-direction: column;
             align-items: center;
+            background: white;
           }
 
           .page-container {
@@ -120,31 +142,78 @@ export default function QuotePrint() {
             display: flex;
             flex-direction: column;
             align-items: center;
+            position: relative;
+            background: white;
+          }
+          
+          .page-wrapper {
+            position: relative;
+            width: 210mm;
+            margin-bottom: 10px;
+            min-height: 297mm;
+            height: 297mm; /* Fixed height for A4 */
+            background: white;
           }
           
           .page {
             width: 210mm;
             min-height: 297mm;
             box-sizing: border-box;
-            padding: 20mm 14mm 32mm 14mm;
+            padding: 20mm 14mm 20mm 14mm; /* Bottom padding for footer space */
             background: white;
             position: relative;
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
-            margin-bottom: 10px;
+            margin: 0 auto; /* Center the page */
+            display: inline-block;
+            text-align: left; /* Reset text-align inside page - content should be left-aligned */
+            page-break-after: auto;
+            page-break-inside: avoid;
+            overflow: visible;
+            padding-bottom: 20mm; /* Space for footer at bottom */
           }
 
           .page-header {
-            margin-bottom: 15px;
+            display: table;
+            width: 100%;
+            margin-bottom: 20px;
+            table-layout: fixed;
+          }
+          
+          .header-left {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            padding-right: 20px;
+          }
+          
+          .header-right {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+            text-align: right;
+            padding-left: 20px;
           }
           
           .company-logo-section {
-            margin-bottom: 15px;
+            margin-bottom: 0;
           }
           
           .company-logo {
             max-width: 120px;
             max-height: 60px;
             object-fit: contain;
+          }
+          
+          .company-header-info {
+            font-size: 11px;
+            line-height: 1.6;
+            color: #333;
+          }
+          
+          .company-header-info .company-name {
+            font-weight: bold;
+            font-size: 13px;
+            margin-bottom: 6px;
           }
           
           /* Quotation Title */
@@ -163,11 +232,14 @@ export default function QuotePrint() {
             gap: 15px;
             margin-bottom: 15px;
             font-size: 12px; /* Increased from 11px */
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
           
           .meta-item {
             display: flex;
             flex-direction: column;
+            page-break-inside: avoid;
           }
           
           .meta-label {
@@ -181,6 +253,8 @@ export default function QuotePrint() {
             gap: 15px;
             margin-bottom: 25px;
             font-size: 12px; /* Increased from 11px */
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
           
           /* Table Styles */
@@ -194,6 +268,11 @@ export default function QuotePrint() {
           
           .quote-table thead {
             display: table-header-group;
+          }
+          
+          .quote-table thead tr {
+            page-break-inside: avoid;
+            page-break-after: avoid;
           }
           
           .quote-table th {
@@ -213,11 +292,23 @@ export default function QuotePrint() {
             vertical-align: top;
           }
           
-          .quote-table tr {
+          .quote-table tbody tr {
             page-break-inside: avoid;
+            page-break-after: auto;
+            break-inside: avoid;
+            display: table-row;
+          }
+          
+          .quote-table tbody tr:last-child {
             page-break-after: auto;
           }
           
+          /* Ensure table rows don't break across pages */
+          .quote-table tbody tr td {
+            page-break-inside: avoid;
+          }
+          
+          .serial-col { width: 35px; text-align: right; }
           .qty-col { width: 45px; text-align: right; }
           .desc-col { width: 180px; text-align: left; }
           .tax-col { width: 80px; text-align: center; }
@@ -231,6 +322,13 @@ export default function QuotePrint() {
             display: flex;
             justify-content: flex-end;
             margin-bottom: 30px;
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          
+          .totals-table {
+            page-break-inside: avoid;
+            break-inside: avoid;
           }
           
           .totals-table {
@@ -265,76 +363,184 @@ export default function QuotePrint() {
             justify-content: space-between;
           }
           
-          /* Footer - Fixed to Bottom */
+          .notes-section {
+            page-break-inside: avoid;
+          }
+          
+          /* Footer - Fixed to Bottom - Repeats on every page */
           .footer {
-            position: fixed;
+            position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
-            height: 30mm;
-            padding: 4mm 14mm 4mm 14mm;
+            width: 100%;
+            height: 15mm;
+            padding: 3mm 14mm;
             background: white;
             border-top: 1px solid #ddd;
-            font-size: 11px; /* Increased from 10px */
+            font-size: 10px;
+            line-height: 1.3;
+            box-sizing: border-box;
+            display: table;
+            table-layout: fixed;
+            z-index: 1000;
+            page-break-inside: avoid;
+            visibility: visible !important;
+            opacity: 1 !important;
+            color: #333 !important;
+            page-break-after: avoid;
+          }
+          
+          .footer-center {
+            display: table-cell;
+            width: 100%;
+            vertical-align: middle;
+            text-align: center;
+          }
+          
+          .bank-info-compact {
+            text-align: center;
+            font-size: 10px;
             line-height: 1.4;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            z-index: 10;
+            color: #333;
           }
           
-          .footer-left, .footer-right {
-            width: 48%;
-          }
-          
-          .footer .company-name {
-            font-weight: bold;
-            margin-bottom: 3px;
-            font-size: 12px; /* Increased from 11px */
-          }
-          
-          .footer .bank-title {
-            font-weight: bold;
-            margin-bottom: 3px;
-          }
-          
-          /* Page Number */
+          /* Page Number - Fixed to repeat on every page */
           .page-number {
-            position: fixed;
+            position: absolute;
             bottom: 8mm;
             right: 14mm;
-            font-size: 11px; /* Increased from 10px */
+            font-size: 11px;
             z-index: 11;
+            color: #333;
+            white-space: nowrap;
+            display: block;
+            visibility: visible;
+            opacity: 1;
+            text-align: right;
+            page-break-after: avoid;
+          }
+          
+          /* Ensure pages break properly */
+          .page-wrapper {
+            page-break-after: always;
+            position: relative;
+            background: white;
+          }
+          
+          .page-wrapper:last-child {
+            page-break-after: auto;
+          }
+          
+          .page {
+            page-break-after: auto;
+            background: white;
           }
           
           /* Print Styles */
           @media print {
-            body { 
+            html, body { 
               background: white !important;
               -webkit-print-color-adjust: exact !important;
               print-color-adjust: exact !important;
-              margin: 0;
-              padding: 0;
+              margin: 0 !important;
+              padding: 0 !important;
             }
             .print-document { 
               width: auto !important;
               min-height: auto !important;
-              display: block;
+              display: block !important;
+              background: white !important;
             }
             .page-container {
-                display: block;
-                width: auto;
+                display: block !important;
+                width: auto !important;
+                background: white !important;
+            }
+            .page-wrapper {
+                page-break-after: always !important;
+                position: relative !important;
+                background: white !important;
+            }
+            .page-wrapper:last-child {
+                page-break-after: auto !important;
             }
             .page {
-                margin: 0;
-                box-shadow: none;
-                page-break-after: auto; /* Changed from always to auto */
-                min-height: auto; /* Allow content to determine height */
-                overflow: visible;
+                margin: 0 !important;
+                box-shadow: none !important;
+                page-break-after: auto !important;
+                min-height: 297mm !important;
+                overflow: visible !important;
+                padding-bottom: 20mm !important; /* Space for footer */
+                page-break-inside: avoid;
+                background: white !important;
+                position: relative !important;
+            }
+            .footer {
+                position: absolute !important;
+                bottom: 0 !important;
+                left: 0 !important;
+                right: 0 !important;
+                width: 100% !important;
+                height: 15mm !important;
+                padding: 3mm 14mm !important;
+                background: white !important;
+                border-top: 1px solid #ddd !important;
+                display: table !important;
+                table-layout: fixed !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                z-index: 1000 !important;
+                page-break-inside: avoid !important;
+                page-break-after: avoid !important;
+                color: #333 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            .footer-center {
+                display: table-cell !important;
+                width: 100% !important;
+                vertical-align: middle !important;
+                text-align: center !important;
+            }
+            .bank-info-compact {
+                text-align: center !important;
+                font-size: 10px !important;
+                color: #333 !important;
+            }
+            .page-number {
+                position: absolute !important;
+                bottom: 8mm !important;
+                right: 14mm !important;
+                font-size: 11px !important;
+                visibility: visible !important;
+                opacity: 1 !important;
+                z-index: 1001 !important;
+                color: #333 !important;
+                page-break-after: avoid !important;
             }
             .no-print { display: none !important; }
-            .footer, .page-number {
-              position: fixed;
+            .quote-table {
+              page-break-inside: auto !important;
+            }
+            .quote-table thead {
+              display: table-header-group !important;
+            }
+            .quote-table tbody tr {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+              page-break-after: auto !important;
+            }
+            .quote-table tbody tr td {
+              page-break-inside: avoid !important;
+            }
+            .totals-section {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+            .totals-table {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
             }
           }
         `}</style>
@@ -342,160 +548,213 @@ export default function QuotePrint() {
         <div className="print-document">
           
           <div className="page-container">
-            {/* Page 1 */}
-            <div className="page">
-              <div className="page-header"></div>
-
-              {/* Company Logo Section */}
-              <div className="company-logo-section">
-                <img 
-                  src={getLogoUrl()} 
-                  alt="Company Logo" 
-                  className="company-logo" 
-                />
-              </div>
-
-              {/* Main Title */}
-              <div className="quotation-title">Quotation N° {quoteData.quotation_number}</div>
-
-              {/* Meta Information */}
-              <div className="meta-grid">
-                <div className="meta-item">
-                  <div className="meta-label">Quotation Date:</div>
-                  <div className="meta-value">{formatDate(quoteData.date)}</div>
-                </div>
-                <div className="meta-item">
-                  <div className="meta-label">Delivery Date:</div>
-                  <div className="meta-value">{formatDate(quoteData.valid_until)}</div>
-                </div>
-                <div className="meta-item">
-                  <div className="meta-label">Payment Term:</div>
-                  <div className="meta-value">Prepaid</div>
-                </div>
-              </div>
-
-              <div className="additional-meta">
-                <div className="meta-item">
-                  <div className="meta-label">Order Contact:</div>
-                  <div className="meta-value">{customer?.company_name}, {customer?.contact_person}</div>
-                  <div className="meta-value">{customer?.address}</div>
-                </div>
-                <div className="meta-item">
-                  <div className="meta-label">Your Reference:</div>
-                  <div className="meta-value">ORDINE N {quoteData.quotation_number}</div>
-                </div>
-                <div className="meta-item">
-                  <div className="meta-label">Discount:</div>
-                  <div className="meta-value">
-                    {formatCurrency(totals?.discountAmount || 0)} of {formatCurrency(totals?.subtotal || 0)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Items Table */}
-              <table className="quote-table">
-                <thead>
-                  <tr>
-                    <th className="qty-col">Quantity</th>
-                    <th className="desc-col">Description</th>
-                    <th className="tax-col">VAT</th>
-                    <th className="price-col">Sale Price</th>
-                    <th className="disc-col">Disc.(%)</th>
-                    <th className="price-col">Price</th>
-                    <th className="total-col">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items?.map((item, index) => {
-                    const totalPrice = item.quantity * item.unit_price;
-                    const discountValue = discount?.type === 'percentage' ? discount.value : 0;
-                    const discountedPrice = item.unit_price * (1 - discountValue / 100);
-                    
-                    const displayName = item.product_name_snapshot || item.product_name;
-                    const displaySku = item.product_code_snapshot || item.sku;
-
-                    return (
-                      <tr key={index}>
-                        <td className="qty-col">{item.quantity.toFixed(3)}</td>
-                        <td className="desc-col">
-                          <div>
-                            <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>{displayName}</div>
-                            <div style={{ fontSize: '10px', color: '#666' }}>{displaySku}</div>
+            {itemPages.map((pageItems, pageIndex) => {
+              const isFirstPage = pageIndex === 0;
+              const isLastPage = pageIndex === itemPages.length - 1;
+              const startItemNumber = pageIndex * itemsPerPage + 1;
+              
+              return (
+                <div key={pageIndex} className="page-wrapper">
+                <div className="page">
+                  {/* Header with Logo and Company Address - only on first page */}
+                  {isFirstPage && (
+                    <>
+                      <div className="page-header">
+                        <div className="header-left">
+                          <div className="company-logo-section">
+                            <img 
+                              src={getLogoUrl()} 
+                              alt="Company Logo" 
+                              className="company-logo" 
+                            />
                           </div>
-                        </td>
-                        <td className="tax-col">VAT al {quoteData.vat_rate || 4}% (debito)</td>
-                        <td className="price-col">{formatCurrency(item.unit_price)}</td>
-                        <td className="disc-col">{discountValue}%</td>
-                        <td className="price-col">{formatCurrency(discountedPrice)}</td>
-                        <td className="total-col">{formatCurrency(totalPrice * (1 - discountValue / 100))}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                        <div className="header-right">
+                          <div className="company-header-info">
+                            <div className="company-name">{company_settings?.company_name || 'Grow United Italia SRL'}</div>
+                            <div>
+                              {company_settings?.address_line1 && <div>{company_settings.address_line1}</div>}
+                              {company_settings?.address_line2 && <div>{company_settings.address_line2}</div>}
+                              {(() => {
+                                const city = company_settings?.city;
+                                const postal = company_settings?.postal_code;
+                                const country = company_settings?.country;
+                                const cityPostalCountry = [city, postal, country].filter(Boolean).join(', ');
+                                if (cityPostalCountry) {
+                                  return <div>{cityPostalCountry}</div>;
+                                }
+                                return null;
+                              })()}
+                              {!company_settings?.address_line1 && !company_settings?.city && (
+                                <>
+                                  <div>Via Paleocapa 1</div>
+                                  <div>Milano, 20121, Italy</div>
+                                </>
+                              )}
+                            </div>
+                            <div>{company_settings?.email || 'administration@growunited.it'}</div>
+                            <div>{company_settings?.website || 'www.canna-it.com'}</div>
+                            <div>IVA {company_settings?.vat_number || 'IT13328670966'}</div>
+                          </div>
+                        </div>
+                      </div>
 
-              {/* Totals Section */}
-              <div className="totals-section">
-                <div className="totals-table">
-                  <div className="totals-row">
-                    <span>Total Without VAT</span>
-                    <span>{formatCurrency((totals?.subtotal || 0) - (totals?.discountAmount || 0))}</span>
+                      {/* Main Title - only on first page */}
+                      <div className="quotation-title">Quotation No. {quoteData.quotation_number}</div>
+
+                      {/* Meta Information - only on first page */}
+                      <div className="meta-grid">
+                        <div className="meta-item">
+                          <div className="meta-label">Quotation Date:</div>
+                          <div className="meta-value">{formatDate(quoteData.date)}</div>
+                        </div>
+                        <div className="meta-item">
+                          <div className="meta-label">Delivery Date:</div>
+                          <div className="meta-value">{formatDate(quoteData.valid_until)}</div>
+                        </div>
+                        <div className="meta-item">
+                          <div className="meta-label">Payment Term:</div>
+                          <div className="meta-value">Prepaid</div>
+                        </div>
+                      </div>
+
+                      <div className="additional-meta">
+                        <div className="meta-item">
+                          <div className="meta-label">Order Contact:</div>
+                          <div className="meta-value">{customer?.company_name}, {customer?.contact_person}</div>
+                          <div className="meta-value">{customer?.address}</div>
+                        </div>
+                        <div className="meta-item">
+                          <div className="meta-label">Your Reference:</div>
+                          <div className="meta-value">ORDER No. {quoteData.quotation_number}</div>
+                        </div>
+                        <div className="meta-item">
+                          <div className="meta-label">Discount:</div>
+                          <div className="meta-value">
+                            {formatCurrency(totals?.discountAmount || 0)} of {formatCurrency(totals?.subtotal || 0)}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* Items Table */}
+                  <table className="quote-table">
+                    <thead>
+                      <tr>
+                        <th className="serial-col">S.No.</th>
+                        <th className="desc-col">Description</th>
+                        <th className="qty-col">Quantity</th>
+                        <th className="tax-col">VAT</th>
+                        <th className="price-col">Sale Price</th>
+                        <th className="disc-col">Discount (%)</th>
+                        <th className="price-col">Price</th>
+                        <th className="total-col">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageItems.map((item, index) => {
+                        const totalPrice = item.quantity * item.unit_price;
+                        const discountValue = discount?.type === 'percentage' ? discount.value : 0;
+                        const discountedPrice = item.unit_price * (1 - discountValue / 100);
+                        
+                        const displayName = item.product_name_snapshot || item.product_name;
+                        const displaySku = item.product_code_snapshot || item.sku;
+                        const itemVatRate = item.vat_rate != null ? item.vat_rate : defaultVatRate;
+                        const itemNumber = startItemNumber + index;
+
+                        return (
+                          <tr key={index}>
+                            <td className="serial-col">{itemNumber}</td>
+                            <td className="desc-col">
+                              <div>
+                                <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>{displayName}</div>
+                                <div style={{ fontSize: '10px', color: '#666' }}>{displaySku}</div>
+                              </div>
+                            </td>
+                            <td className="qty-col">{item.quantity.toFixed(3)}</td>
+                            <td className="tax-col">VAT at {itemVatRate}%</td>
+                            <td className="price-col">{formatCurrency(item.unit_price)}</td>
+                            <td className="disc-col">{discountValue}%</td>
+                            <td className="price-col">{formatCurrency(discountedPrice)}</td>
+                            <td className="total-col">{formatCurrency(totalPrice * (1 - discountValue / 100))}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Totals Section - only on last page */}
+                  {isLastPage && (
+                    <>
+                      <div className="totals-section">
+                        <div className="totals-table">
+                          <div className="totals-row">
+                            <span>Total Without VAT</span>
+                            <span>{formatCurrency((totals?.subtotal || 0) - (totals?.discountAmount || 0))}</span>
+                          </div>
+                          
+                          {/* Add Discount Total */}
+                          <div className="totals-row">
+                            <span>Discount</span>
+                            <span>-{formatCurrency(totals?.discountAmount || 0)}</span>
+                          </div>
+                          
+                          <div className="payment-term-section">
+                            <span>Payment Term</span>
+                            <span>Prepaid</span>
+                          </div>
+                          
+                          <div className="totals-row">
+                            <span>Total VAT</span>
+                            <span>{formatCurrency(totals?.vatAmount || totals?.taxAmount || 0)}</span>
+                          </div>
+                          
+                          <div className="totals-row total-final">
+                            <span>Total</span>
+                            <span>{formatCurrency(totals?.total || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Notes Section - only on last page */}
+                      {notes && (
+                        <div className="notes-section" style={{ 
+                          marginTop: '20px', 
+                          marginBottom: '20px',
+                          padding: '15px', 
+                          background: '#f9f9f9', 
+                          border: '1px solid #ddd', 
+                          borderRadius: '8px'
+                        }}>
+                          <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>Additional Notes:</div>
+                          <div style={{ fontSize: '12px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{notes}</div>
+                        </div>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* Footer - Fixed to bottom of each page */}
+                  <div className="footer">
+                    <div className="footer-center">
+                      <div className="bank-info-compact">
+                        <strong>Bank Details:</strong> {company_settings?.bank_name_branch || 'BANCA PASSADORE & C. S.P.A. - CORSO MATTEOTTI, 7 - MILANO 20121'} | 
+                        Account nr.: {company_settings?.account_number || '1118520'} | 
+                        IBAN: {company_settings?.iban || 'IT87I0333201600000001118520'} | 
+                        BIC/Swift: {company_settings?.bic_swift || 'PASBITGG'}
+                      </div>
+                    </div>
                   </div>
                   
-                  {/* Add Discount Total */}
-                  <div className="totals-row">
-                    <span>Discount</span>
-                    <span>-{formatCurrency(totals?.discountAmount || 0)}</span>
-                  </div>
-                  
-                  <div className="payment-term-section">
-                    <span>Payment Term</span>
-                    <span>Prepaid</span>
-                  </div>
-                  
-                  <div className="totals-row">
-                    <span>VAT ({quoteData.vat_rate || 4}%)</span>
-                    <span>{formatCurrency(totals?.vatAmount || totals?.taxAmount || 0)}</span>
-                  </div>
-                  
-                  <div className="totals-row total-final">
-                    <span>Total</span>
-                    <span>{formatCurrency(totals?.total || 0)}</span>
+                  {/* Page Number - Fixed to bottom of each page */}
+                  <div className="page-number">
+                    Page: {pageIndex + 1} / {itemPages.length}
                   </div>
                 </div>
               </div>
-
-              {/* Notes Section */}
-              {notes && (
-                <div className="notes-section" style={{ marginTop: '20px', padding: '15px', background: '#f9f9f9', border: '1px solid #ddd', borderRadius: '8px' }}>
-                  <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>Additional Notes:</div>
-                  <div style={{ fontSize: '12px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{notes}</div>
-                </div>
-              )}
-            </div>
+              );
+            })}
           </div>
-
-          {/* Footer - Fixed to Bottom */}
-          <div className="footer">
-            <div className="footer-left">
-              <div className="company-name">{company_settings?.company_name || 'Grow United Italia SRL'}</div>
-              <div>{company_settings?.address?.split('\n').join('\n') || 'Via Paleocapa 1\nMilano, 20121\nItaly'}</div>
-              <div>{company_settings?.email || 'administration@growunited.it'}</div>
-              <div>{company_settings?.website || 'www.canna-it.com'}</div>
-              <div>IVA {company_settings?.vat_number || 'IT13328670966'}</div>
-            </div>
-            
-            <div className="footer-right">
-              <div className="bank-title">Bank Details:</div>
-              <div>BANCA PASSADORE & C. S.P.A. - CORSO MATTEOTTI, 7 - MILANO 20121</div>
-              <div>Account nr.: 1118520</div>
-              <div>IBAN-code: IT87I0333201600000001118520</div>
-              <div>BIC/Swift: PASBITGG</div>
-            </div>
-          </div>
-
-          {/* Page Number */}
-          <div className="page-number">Page: 1 / 1</div>
         </div>
 
         <div className="no-print" style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }}>

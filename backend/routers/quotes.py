@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from db import get_session
-from models import Quote, QuoteItem, Product, Customer, User
+from models import Quote, QuoteItem, Product, Customer, User, CompanySettings
 from schemas import QuoteCreate, QuoteRead, QuoteUpdate, QuoteItemIn
 from config import settings
 from auth import require_admin_role, get_current_user_id, get_current_user
@@ -91,6 +91,14 @@ def _validate_discount_against_subtotal(subtotal: Decimal, discount_type: str, d
         )
     # For percentage discounts, the validation already happens in validators.py (0-100%)
 
+async def _get_default_vat_rate(session: AsyncSession) -> Decimal:
+    """Get default VAT rate from company settings."""
+    res = await session.execute(select(CompanySettings).limit(1))
+    company_settings = res.scalar_one_or_none()
+    if company_settings and company_settings.default_vat_rate is not None:
+        return company_settings.default_vat_rate
+    return Decimal(str(settings.default_vat_rate))
+
 async def _build_quote_item(session: AsyncSession, quote_id: int, item: QuoteItemIn) -> QuoteItem:
     """Build a QuoteItem from QuoteItemIn, validating product if provided."""
     quantity = item.quantity or Decimal("1")
@@ -105,11 +113,15 @@ async def _build_quote_item(session: AsyncSession, quote_id: int, item: QuoteIte
             raise HTTPException(400, f"Product {item.product_id} not found")
         _validate_product_for_quote_item(session, item.product_id, product)
         unit_price = unit_price if unit_price is not None else product.unit_price
-        vat_rate = vat_rate if vat_rate is not None else product.vat_rate
+        # Use item vat_rate if provided, otherwise product vat_rate, otherwise company default
+        if vat_rate is None:
+            vat_rate = product.vat_rate if product.vat_rate and product.vat_rate > 0 else None
         description = description or product.name
 
     unit_price = unit_price if unit_price is not None else Decimal("0")
-    vat_rate = vat_rate if vat_rate is not None else Decimal("0")
+    # Fall back to company default VAT rate if not provided
+    if vat_rate is None:
+        vat_rate = await _get_default_vat_rate(session)
     line_total = (quantity or Decimal("1")) * unit_price
     line_total_vat = (line_total * vat_rate) / Decimal("100")
 

@@ -83,7 +83,7 @@ export default function QuotationSummary({
 
         {/* VAT */}
         <div className="flex justify-between items-center p-3 clay-inset bg-white/40 rounded-2xl">
-          <span className="font-medium text-slate-700">VAT ({totals.vatRate || 4}%):</span>
+          <span className="font-medium text-slate-700">Total VAT:</span>
           <span className="font-bold text-green-600">€{totals.vatAmount.toFixed(2)}</span>
         </div>
 

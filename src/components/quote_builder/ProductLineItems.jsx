@@ -25,7 +25,8 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
       setLineItems([...lineItems, {
         ...product,
         quantity: 1,
-        unit_price: product.unit_price || 0
+        unit_price: product.unit_price || 0,
+        vat_rate: product.vat_rate || null
       }]);
     }
 
@@ -42,6 +43,10 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
     // Ensure unit_price is always a number >= 0
     else if (field === 'unit_price') {
       updatedItems[index][field] = (value === '' || value == null || value === '.') ? 0 : Math.max(0, parseFloat(value) || 0);
+    }
+    // Ensure vat_rate is a number >= 0 or null/empty
+    else if (field === 'vat_rate') {
+      updatedItems[index][field] = (value === '' || value == null) ? null : Math.max(0, parseFloat(value) || 0);
     }
     else {
       updatedItems[index][field] = value;
@@ -100,7 +105,7 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                   </Button>
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs text-slate-600 mb-1 block">Quantity</label>
                   <Input
@@ -160,6 +165,41 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                   />
                 </div>
                 <div>
+                  <label className="text-xs text-slate-600 mb-1 block">VAT Rate (%)</label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    value={item.vat_rate != null ? String(item.vat_rate) : ''}
+                    onChange={(e) => {
+                      const inputVal = e.target.value;
+                      if (inputVal === '') {
+                        const updatedItems = [...lineItems];
+                        updatedItems[index].vat_rate = '';
+                        setLineItems(updatedItems);
+                      } else {
+                        const val = parseFloat(inputVal);
+                        if (!isNaN(val) && val >= 0) {
+                          updateLineItem(index, 'vat_rate', val);
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      const inputVal = e.target.value;
+                      if (inputVal === '') {
+                        updateLineItem(index, 'vat_rate', null);
+                      } else {
+                        const val = parseFloat(inputVal);
+                        updateLineItem(index, 'vat_rate', isNaN(val) || val < 0 ? null : val);
+                      }
+                    }}
+                    className="clay-inset bg-white/80 border-none rounded-xl h-10"
+                    placeholder="Default"
+                    disabled={disabled}
+                  />
+                </div>
+                <div>
                   <label className="text-xs text-slate-600 mb-1 block">Subtotal</label>
                   <div className="font-bold text-lg text-slate-800 h-10 flex items-center">
                     €{(item.quantity * item.unit_price).toFixed(2)}
@@ -176,23 +216,24 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
             <table className="w-full text-sm" style={{ tableLayout: 'fixed' }}>
               <thead>
                 <tr className="border-b border-slate-200">
-                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '35%' }}>Product</th>
-                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '18%' }}>Quantity</th>
-                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '20%' }}>Unit Price</th>
-                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '20%' }}>Subtotal</th>
-                  <th className="h-9 px-1 text-center align-middle font-semibold text-slate-700 text-xs" style={{ width: '7%' }}></th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '28%' }}>Product</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '12%' }}>Quantity</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '15%' }}>Unit Price</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '12%' }}>VAT Rate (%)</th>
+                  <th className="h-9 px-2 text-left align-middle font-semibold text-slate-700 text-xs" style={{ width: '15%' }}>Subtotal</th>
+                  <th className="h-9 px-1 text-center align-middle font-semibold text-slate-700 text-xs" style={{ width: '6%' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {lineItems.map((item, index) => (
                   <tr key={`${item.id}-${index}`} className="border-b border-slate-200">
-                    <td className="p-2 align-middle font-medium text-slate-800 text-sm" style={{ width: '35%' }}>
+                    <td className="p-2 align-middle font-medium text-slate-800 text-sm" style={{ width: '28%' }}>
                       <div className="pr-2">
                         <p className="font-semibold break-words leading-tight text-xs">{item.name}</p>
                         <p className="text-slate-600 text-xs break-words leading-tight">{item.sku}</p>
                       </div>
                     </td>
-                    <td className="p-2 align-middle" style={{ width: '18%' }}>
+                    <td className="p-2 align-middle" style={{ width: '12%' }}>
                       <Input
                         type="number"
                         min="1"
@@ -216,7 +257,7 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                         disabled={disabled}
                       />
                     </td>
-                    <td className="p-2 align-middle" style={{ width: '20%' }}>
+                    <td className="p-2 align-middle" style={{ width: '15%' }}>
                       <Input
                         type="number"
                         step="0.01"
@@ -249,7 +290,41 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                         disabled={disabled}
                       />
                     </td>
-                    <td className="p-2 align-middle" style={{ width: '20%' }}>
+                    <td className="p-2 align-middle" style={{ width: '12%' }}>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        value={item.vat_rate != null ? String(item.vat_rate) : ''}
+                        onChange={(e) => {
+                          const inputVal = e.target.value;
+                          if (inputVal === '') {
+                            const updatedItems = [...lineItems];
+                            updatedItems[index].vat_rate = '';
+                            setLineItems(updatedItems);
+                          } else {
+                            const val = parseFloat(inputVal);
+                            if (!isNaN(val) && val >= 0) {
+                              updateLineItem(index, 'vat_rate', val);
+                            }
+                          }
+                        }}
+                        onBlur={(e) => {
+                          const inputVal = e.target.value;
+                          if (inputVal === '') {
+                            updateLineItem(index, 'vat_rate', null);
+                          } else {
+                            const val = parseFloat(inputVal);
+                            updateLineItem(index, 'vat_rate', isNaN(val) || val < 0 ? null : val);
+                          }
+                        }}
+                        className="clay-inset bg-white/60 border-none rounded-xl h-9 w-full text-sm"
+                        placeholder="Default"
+                        disabled={disabled}
+                      />
+                    </td>
+                    <td className="p-2 align-middle" style={{ width: '15%' }}>
                       <div className="font-bold text-sm text-slate-800 whitespace-nowrap">
                         €{((item.quantity || 1) * (typeof item.unit_price === 'number' ? item.unit_price : parseFloat(item.unit_price) || 0)).toFixed(2)}
                       </div>

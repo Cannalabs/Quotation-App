@@ -184,7 +184,8 @@ export default function QuoteBuilder() {
           name: productName,
           sku: productSku,
           quantity: item.quantity || 1,
-          unit_price: item.unit_price || 0
+          unit_price: item.unit_price || 0,
+          vat_rate: item.vat_rate || null
         };
       });
 
@@ -222,7 +223,8 @@ export default function QuoteBuilder() {
         .map((p) => ({
           ...p,
           quantity: 1,
-          unit_price: p.unit_price || 0
+          unit_price: p.unit_price || 0,
+          vat_rate: p.vat_rate || null
         }));
         setLineItems(lineItemsFromProducts);
       }
@@ -263,26 +265,43 @@ export default function QuoteBuilder() {
 
     const taxableTotal = subtotal - discountAmount;
 
-    // Get VAT rate from company settings
-    let vatRate = 4; // Default to 4%
+    // Get default VAT rate from company settings for items without VAT rate
+    let defaultVatRate = 4; // Default to 4%
     try {
       const settings = await CompanySettings.list();
       if (settings.length > 0 && settings[0].default_vat_rate !== undefined && settings[0].default_vat_rate !== null) {
-        vatRate = settings[0].default_vat_rate;
+        defaultVatRate = settings[0].default_vat_rate;
       }
     } catch (error) {
       console.warn("Could not load VAT rate from settings, using default 4%:", error);
     }
 
-    const vatAmount = taxableTotal * (vatRate / 100);
-    const total = taxableTotal + vatAmount;
+    // Calculate VAT per item, then sum
+    let totalVatAmount = 0;
+    lineItems.forEach((item) => {
+      const itemSubtotal = item.quantity * item.unit_price;
+      // Apply discount proportionally to each item
+      const itemDiscount = discountType === "percentage" 
+        ? itemSubtotal * (discountValue / 100)
+        : discountType === "fixed"
+        ? (itemSubtotal / subtotal) * discountValue
+        : 0;
+      const itemTaxableTotal = itemSubtotal - itemDiscount;
+      
+      // Use item's VAT rate if provided, otherwise use company default
+      const itemVatRate = item.vat_rate != null && item.vat_rate !== '' ? item.vat_rate : defaultVatRate;
+      const itemVatAmount = itemTaxableTotal * (itemVatRate / 100);
+      totalVatAmount += itemVatAmount;
+    });
+
+    const total = taxableTotal + totalVatAmount;
 
     return {
       subtotal,
       discountAmount,
       taxableTotal,
-      vatAmount, // Changed from taxAmount
-      vatRate, // Added vatRate
+      vatAmount: totalVatAmount,
+      vatRate: null, // No single VAT rate anymore, it's per item
       total
     };
   };
@@ -332,6 +351,7 @@ export default function QuoteBuilder() {
           sku: item.sku,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          vat_rate: item.vat_rate != null && item.vat_rate !== '' ? item.vat_rate : null,
           total_price: item.quantity * item.unit_price
         })),
         notes: quotationNotes, // Add notes to payload
@@ -410,6 +430,7 @@ export default function QuoteBuilder() {
           sku: item.sku,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          vat_rate: item.vat_rate != null && item.vat_rate !== '' ? item.vat_rate : null,
           description: item.description || ""
         })),
         totals: totalsForPrint, // Use the fresh totals
@@ -493,11 +514,12 @@ export default function QuoteBuilder() {
           product_code_snapshot: item.sku,
           quantity: item.quantity,
           unit_price: item.unit_price,
+          vat_rate: item.vat_rate != null && item.vat_rate !== '' ? item.vat_rate : null,
           description: item.description || ""
         })),
         totals: totalsForEmail,
         discount: { type: discountType, value: discountValue },
-        vat_rate: totalsForEmail.vatRate || 4,
+        vat_rate: null, // VAT is now per-item, no single rate
         currency: "EUR",
         terms_and_conditions: quotationData.terms_and_conditions,
         notes: quotationNotes

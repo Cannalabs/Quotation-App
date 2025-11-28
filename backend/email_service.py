@@ -1057,7 +1057,14 @@ class EmailService:
         valid_until = quotation_data.get('valid_until', 'N/A')
         notes = quotation_data.get('notes', '')
         discount = quotation_data.get('discount', {})
-        vat_rate = quotation_data.get('vat_rate', 4)
+        # Use default VAT rate from company settings, matching QuotePrint.jsx
+        default_vat_rate = company_settings.get('default_vat_rate', 4)
+        
+        # Split items into chunks of 15 per page (email service uses 15, QuotePrint.jsx uses 10)
+        items_per_page = 15
+        item_pages = []
+        for i in range(0, len(line_items), items_per_page):
+            item_pages.append(line_items[i:i + items_per_page])
         
         # Format currency
         def format_currency(amount, currency='EUR'):
@@ -1087,24 +1094,31 @@ class EmailService:
                 logger.warning(f"Failed to format date '{date_str}': {e}")
                 return str(date_str) if date_str else ''
         
-        # Prepare company address (Address Line 1, Address Line 2, City + Postal, Country)
-        address_lines: list[str] = []
+        # Prepare company address HTML for header (matching QuotePrint.jsx structure)
+        address_html_parts = []
         address_line1 = company_settings.get('address_line1')
         address_line2 = company_settings.get('address_line2')
         city = company_settings.get('city')
         postal_code = company_settings.get('postal_code')
         country = company_settings.get('country')
+        
         if address_line1:
-            address_lines.append(address_line1)
+            address_html_parts.append(f'<div>{address_line1}</div>')
         if address_line2:
-            address_lines.append(address_line2)
-        city_postal = ", ".join([x for x in [city, postal_code] if x])
-        if city_postal:
-            address_lines.append(city_postal)
-        if country:
-            address_lines.append(country)
-        # Each address line will be a separate div for better formatting
-        address_html = "<br>".join(address_lines)
+            address_html_parts.append(f'<div>{address_line2}</div>')
+        # Merge city, postal_code, and country into one line
+        city_postal_country = ", ".join([x for x in [city, postal_code, country] if x])
+        if city_postal_country:
+            address_html_parts.append(f'<div>{city_postal_country}</div>')
+        
+        # If no address info, use default
+        if not address_line1 and not city:
+            address_html_parts = [
+                '<div>Via Paleocapa 1</div>',
+                '<div>Milano, 20121, Italy</div>'
+            ]
+        
+        address_html = ''.join(address_html_parts)
 
         # Prepare company contact
         company_email = company_settings.get('email') or ''
@@ -1166,7 +1180,19 @@ class EmailService:
                 @page {{
                     size: A4;
                     margin: 0;
-                    margin-bottom: 40mm; /* Reserve space for footer on each page */
+                    margin-bottom: 0; /* Footer is inside page, no margin needed */
+                }}
+                
+                @page :first {{
+                    margin-bottom: 0;
+                }}
+                
+                @page :left {{
+                    margin-bottom: 0;
+                }}
+                
+                @page :right {{
+                    margin-bottom: 0;
                 }}
                 
                 body {{ 
@@ -1195,38 +1221,97 @@ class EmailService:
                     min-height: 100vh;
                     display: block;
                     text-align: center; /* Center align content */
+                    background: white;
                 }}
 
                 .page-container {{
                     width: 100%;
-                    display: inline-block;
+                    display: block;
                     text-align: center;
+                    background: white;
+                }}
+                
+                .page-wrapper {{
+                    position: relative;
+                    width: 210mm;
+                    margin-bottom: 10px;
+                    min-height: 297mm;
+                    background: white;
+                    page-break-after: always;
+                    page-break-before: always;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                    break-after: page;
+                    display: block;
+                    clear: both;
+                }}
+                
+                .page-wrapper:first-child {{
+                    page-break-before: auto;
+                }}
+                
+                .page-wrapper:last-child {{
+                    page-break-after: auto;
                 }}
                 
                 .page {{
                     width: 210mm;
                     min-height: 297mm;
                     box-sizing: border-box;
-                    padding: 20mm 14mm 45mm 14mm; /* Increased bottom padding to 45mm to prevent footer overlap */
+                    padding: 20mm 14mm 25mm 14mm; /* Increased bottom padding for footer space */
                     background: white;
                     position: relative;
                     margin: 0 auto; /* Center the page */
                     display: inline-block;
                     text-align: left; /* Reset text-align inside page - content should be left-aligned */
+                    page-break-after: auto;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                    overflow: visible;
                 }}
 
                 .page-header {{
-                    margin-bottom: 15px;
+                    display: table;
+                    width: 100%;
+                    margin-bottom: 20px;
+                    table-layout: fixed;
+                }}
+                
+                .header-left {{
+                    display: table-cell;
+                    width: 50%;
+                    vertical-align: top;
+                    padding-right: 20px;
+                }}
+                
+                .header-right {{
+                    display: table-cell;
+                    width: 50%;
+                    vertical-align: top;
+                    text-align: right;
+                    padding-left: 20px;
                 }}
                 
                 .company-logo-section {{
-                    margin-bottom: 15px;
+                    margin-bottom: 0;
                 }}
                 
                 .company-logo {{
                     max-width: 120px;
                     max-height: 60px;
                     object-fit: contain;
+                }}
+                
+                .company-header-info {{
+                    font-size: 11px;
+                    line-height: 1.6;
+                    color: #333;
+                }}
+                
+                .company-header-info .company-name {{
+                    font-weight: bold;
+                    font-size: 13px;
+                    margin-bottom: 6px;
                 }}
                 
                 /* Quotation Title */
@@ -1247,6 +1332,8 @@ class EmailService:
                     border-spacing: 15px;
                     margin-bottom: 15px;
                     font-size: 12px; /* Increased from 11px */
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }}
                 
                 .meta-item {{
@@ -1254,6 +1341,7 @@ class EmailService:
                     width: 33.33%;
                     vertical-align: top;
                     padding: 0;
+                    page-break-inside: avoid;
                 }}
                 
                 .meta-label {{
@@ -1274,6 +1362,8 @@ class EmailService:
                     border-spacing: 15px;
                     margin-bottom: 25px;
                     font-size: 12px; /* Increased from 11px */
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }}
                 
                 /* Table Styles */
@@ -1282,11 +1372,17 @@ class EmailService:
                     border-collapse: collapse;
                     font-size: 11px; /* Increased from 10px */
                     margin-bottom: 20px;
-                    page-break-inside: auto;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }}
                 
                 .quote-table thead {{
                     display: table-header-group;
+                }}
+                
+                .quote-table thead tr {{
+                    page-break-inside: avoid;
+                    page-break-after: avoid;
                 }}
                 
                 .quote-table th {{
@@ -1306,62 +1402,69 @@ class EmailService:
                     vertical-align: top;
                 }}
                 
-                .quote-table tr {{
+                .quote-table tbody tr {{
                     page-break-inside: avoid;
                     page-break-after: auto;
+                    break-inside: avoid;
+                    display: table-row;
                 }}
                 
-                .qty-col {{ width: 45px; text-align: right; }}
+                .quote-table tbody tr td {{
+                    page-break-inside: avoid;
+                }}
+                
                 .serial-col {{ width: 35px; text-align: right; }}
+                .qty-col {{ width: 45px; text-align: right; }}
                 .desc-col {{ width: 180px; text-align: left; }}
                 .tax-col {{ width: 80px; text-align: center; }}
                 .price-col {{ width: 55px; text-align: right; }}
                 .disc-col {{ width: 45px; text-align: right; }}
                 .total-col {{ width: 55px; text-align: right; }}
                 
-                /* Totals Section - Right Aligned */
+                /* Totals Section - Table layout for wkhtmltopdf compatibility */
                 .totals-section {{
                     margin-top: 25px;
                     margin-bottom: 30px;
                     text-align: right;
                     width: 100%;
+                    page-break-inside: avoid;
+                    break-inside: avoid;
                 }}
                 
                 .totals-table {{
-                    width: 280px;
+                    width: 250px;
                     margin-left: auto;
                     margin-right: 0;
-                    font-size: 13px;
-                    text-align: right;
+                    font-size: 13px; /* Increased from 12px */
+                    page-break-inside: avoid;
+                    break-inside: avoid;
+                    border-collapse: collapse;
                 }}
                 
                 .totals-row {{
                     display: table-row;
                 }}
                 
-                .totals-row span {{
-                    display: table-cell;
+                .totals-row td {{
                     padding: 6px 0;
                     border-bottom: 1px solid #eee;
                     text-align: left;
                 }}
                 
-                .totals-row span:first-child {{
-                    text-align: left;
+                .totals-row td:first-child {{
                     padding-right: 20px;
                 }}
                 
-                .totals-row span:last-child {{
+                .totals-row td:last-child {{
                     text-align: right;
-                    font-weight: normal;
                 }}
                 
                 .totals-row.total-final {{
                     font-weight: bold;
                 }}
                 
-                .totals-row.total-final span {{
-                    font-size: 16px;
+                .totals-row.total-final td {{
+                    font-size: 16px; /* Increased from 14px */
                     border-bottom: 2px solid #333;
                     border-top: 2px solid #333;
                     margin-top: 10px;
@@ -1369,85 +1472,80 @@ class EmailService:
                     padding-bottom: 10px;
                 }}
                 
-                .totals-row.total-final span:last-child {{
+                .totals-row.total-final td:last-child {{
                     font-weight: bold;
                 }}
                 
                 .payment-term-section {{
-                    margin: 8px 0;
-                    font-size: 12px;
-                    font-weight: bold;
-                    padding: 6px 0;
-                    border-bottom: 1px solid #eee;
                     display: table-row;
                 }}
                 
-                .payment-term-section span {{
-                    display: table-cell;
+                .payment-term-section td {{
+                    margin: 8px 0;
+                    font-size: 12px; /* Increased from 11px */
+                    font-weight: bold;
+                    padding: 6px 0;
+                    border-bottom: 1px solid #eee;
                     text-align: left;
+                }}
+                
+                .payment-term-section td:first-child {{
                     padding-right: 20px;
                 }}
                 
-                .payment-term-section span:last-child {{
+                .payment-term-section td:last-child {{
                     text-align: right;
+                }}
+                
+                .notes-section {{
+                    page-break-inside: avoid;
                 }}
                 
                 /* Footer - Fixed to Bottom - Repeats on every page */
                 .footer {{
-                    position: fixed;
+                    position: absolute;
                     bottom: 0;
-                    left: 50%;
-                    margin-left: -105mm; /* Half of 210mm to center */
-                    width: 210mm;
-                    height: 30mm;
-                    padding: 4mm 30px 4mm 30px;
+                    left: 0;
+                    right: 0;
+                    width: 100%;
+                    height: 15mm;
+                    padding: 3mm 14mm;
                     background: white;
                     border-top: 1px solid #ddd;
-                    font-size: 11px;
-                    line-height: 1.4;
+                    font-size: 10px;
+                    line-height: 1.3;
                     box-sizing: border-box;
                     display: table;
                     table-layout: fixed;
-                    z-index: 10;
+                    z-index: 1000;
                     page-break-inside: avoid;
+                    visibility: visible !important;
+                    opacity: 1 !important;
+                    color: #333 !important;
+                    page-break-after: avoid;
+                    margin-bottom: 0;
                 }}
                 
-                .footer-left, .footer-right {{
+                .footer-center {{
                     display: table-cell;
-                    width: 50%;
-                    vertical-align: top;
-                    padding-right: 15px;
-                    text-align: left; /* Ensure footer content is left-aligned */
+                    width: 100%;
+                    vertical-align: middle;
+                    text-align: center;
                 }}
                 
-                .footer-right {{
-                    padding-right: 0;
-                    padding-left: 15px;
-                    text-align: left; /* Ensure footer content is left-aligned */
-                }}
-                
-                .footer {{
-                    text-align: left; /* Ensure footer content is left-aligned, not center */
-                }}
-                
-                .footer .company-name {{
-                    font-weight: bold;
-                    margin-bottom: 3px;
-                    font-size: 12px; /* Increased from 11px */
-                }}
-                
-                .footer .bank-title {{
-                    font-weight: bold;
-                    margin-bottom: 3px;
+                .bank-info-compact {{
+                    text-align: center;
+                    font-size: 10px;
+                    line-height: 1.4;
+                    color: #333;
                 }}
                 
                 /* Page Number - Fixed to repeat on every page */
                 .page-number {{
-                    position: fixed;
+                    position: absolute;
                     bottom: 8mm;
-                    left: 50%;
-                    margin-left: 91mm; /* Position: page center (105mm) - 14mm padding from right = 91mm from center */
-                    font-size: 11px; /* Increased from 10px */
+                    right: 14mm;
+                    font-size: 11px;
                     z-index: 11;
                     color: #333;
                     white-space: nowrap;
@@ -1455,6 +1553,7 @@ class EmailService:
                     visibility: visible;
                     opacity: 1;
                     text-align: right;
+                    page-break-after: avoid;
                 }}
                 
                 /* Print Styles */
@@ -1473,50 +1572,133 @@ class EmailService:
                         min-height: auto !important;
                         display: block !important;
                         text-align: center !important;
+                        background: white !important;
                     }}
                     .page-container {{
-                        display: inline-block !important;
+                        display: block !important;
                         width: auto !important;
                         text-align: center !important;
+                        background: white !important;
+                    }}
+                    .page-wrapper {{
+                        page-break-after: always !important;
+                        page-break-before: always !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        break-after: page !important;
+                        break-before: page !important;
+                        position: relative !important;
+                        background: white !important;
+                        min-height: 297mm !important;
+                        display: block !important;
+                        clear: both !important;
+                        width: 210mm !important;
+                        margin: 0 auto 10px auto !important;
+                    }}
+                    .page-wrapper:first-child {{
+                        page-break-before: auto !important;
+                        break-before: auto !important;
+                    }}
+                    .page-wrapper:last-child {{
+                        page-break-after: auto !important;
                     }}
                     .page {{
                         margin: 0 auto !important; /* Center the page */
                         box-shadow: none !important;
-                        page-break-after: auto; /* Changed from always to auto */
-                        min-height: auto; /* Allow content to determine height */
-                        padding-bottom: 45mm !important; /* Increased to prevent footer overlap */
-                        overflow: visible;
+                        page-break-after: auto !important;
+                        min-height: 297mm !important;
+                        overflow: visible !important;
+                        padding-bottom: 25mm !important; /* Space for footer */
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        background: white !important;
+                        position: relative !important;
                         display: inline-block !important;
                         text-align: left !important; /* Reset text-align inside page */
                     }}
                     .no-print {{ display: none !important; }}
-                    .footer {{
-                        position: fixed !important;
-                        left: 50% !important;
-                        margin-left: -105mm !important; /* Half of 210mm to center */
-                        width: 210mm !important;
+                    .quote-table {{
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }}
+                    .quote-table thead {{
+                        display: table-header-group !important;
+                    }}
+                    .quote-table tbody tr {{
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        page-break-after: auto !important;
+                    }}
+                    .quote-table tbody tr td {{
+                        page-break-inside: avoid !important;
+                    }}
+                    .totals-section {{
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }}
+                    .totals-table {{
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                        display: table !important;
+                    }}
+                    .meta-grid {{
                         display: table !important;
                         table-layout: fixed !important;
-                        text-align: left !important; /* Ensure footer content is left-aligned */
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }}
-                    .footer-left, .footer-right {{
+                    .meta-item {{
                         display: table-cell !important;
-                        width: 50% !important;
-                        vertical-align: top !important;
-                        text-align: left !important; /* Ensure footer content is left-aligned */
+                        page-break-inside: avoid !important;
                     }}
-                    .footer-right {{
-                        padding-left: 15px !important;
-                        padding-right: 0 !important;
-                        text-align: left !important; /* Ensure footer content is left-aligned */
+                    .additional-meta {{
+                        display: table !important;
+                        table-layout: fixed !important;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
                     }}
-                    .page-number {{
-                        position: fixed !important;
-                        left: 50% !important;
-                        margin-left: 91mm !important; /* Position from center: (210mm/2) - 14mm padding = 91mm */
+                    .footer {{
+                        position: absolute !important;
+                        bottom: 0 !important;
+                        left: 0 !important;
+                        right: 0 !important;
+                        width: 100% !important;
+                        height: 15mm !important;
+                        padding: 3mm 14mm !important;
+                        background: white !important;
+                        border-top: 1px solid #ddd !important;
+                        display: table !important;
+                        table-layout: fixed !important;
                         visibility: visible !important;
                         opacity: 1 !important;
-                        display: block !important;
+                        z-index: 1000 !important;
+                        page-break-inside: avoid !important;
+                        page-break-after: avoid !important;
+                        color: #333 !important;
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }}
+                    .footer-center {{
+                        display: table-cell !important;
+                        width: 100% !important;
+                        vertical-align: middle !important;
+                        text-align: center !important;
+                    }}
+                    .bank-info-compact {{
+                        text-align: center !important;
+                        font-size: 10px !important;
+                        color: #333 !important;
+                    }}
+                    .page-number {{
+                        position: absolute !important;
+                        bottom: 8mm !important;
+                        right: 14mm !important;
+                        font-size: 11px !important;
+                        visibility: visible !important;
+                        opacity: 1 !important;
+                        z-index: 1001 !important;
+                        color: #333 !important;
+                        page-break-after: avoid !important;
                     }}
                 }}
             </style>
@@ -1524,170 +1706,219 @@ class EmailService:
         <body>
             <div class="print-document">
                 <div class="page-container">
-                    <div class="page">
-                        <div class="page-header"></div>
-
-                        <!-- Company Logo Section -->
-                        <div class="company-logo-section">
-                            {logo_html}
-                        </div>
-
-                        <!-- Main Title -->
-                        <div class="quotation-title">Quotation No. {quotation_number}</div>
-
-                        <!-- Meta Information -->
-                        <div class="meta-grid">
-                            <div class="meta-item">
-                                <div class="meta-label">Quotation Date:</div>
-                                <div class="meta-value">{format_date(date)}</div>
-                            </div>
-                            <div class="meta-item">
-                                <div class="meta-label">Delivery Date:</div>
-                                <div class="meta-value">{format_date(valid_until)}</div>
-                            </div>
-                            <div class="meta-item">
-                                <div class="meta-label">Payment Term:</div>
-                                <div class="meta-value">Prepaid</div>
-                            </div>
-                        </div>
-
-                        <div class="additional-meta">
-                            <div class="meta-item">
-                                <div class="meta-label">Order Contact:</div>
-                                <div class="meta-value">{customer.get('company_name', '')}, {customer.get('contact_person', '')}</div>
-                                <div class="meta-value">{customer.get('address', '')}</div>
-                            </div>
-                            <div class="meta-item">
-                                <div class="meta-label">Your Reference:</div>
-                                <div class="meta-value">ORDER No. {quotation_number}</div>
-                            </div>
-                            <div class="meta-item">
-                                <div class="meta-label">Discount:</div>
-                                <div class="meta-value">
-                                    {format_currency(totals.get('discountAmount', 0))} of {format_currency(totals.get('subtotal', 0))}
+        """
+        
+        # Generate pages with 15 items per page
+        for page_index, page_items in enumerate(item_pages):
+            is_first_page = page_index == 0
+            is_last_page = page_index == len(item_pages) - 1
+            start_item_number = page_index * items_per_page + 1
+            
+            html += f"""
+                    <div class="page-wrapper">
+                        <div class="page">
+            """
+            
+            # Header with Logo and Company Address - only on first page
+            if is_first_page:
+                html += f"""
+                            <!-- Header with Logo and Company Address -->
+                            <div class="page-header">
+                                <div class="header-left">
+                                    <div class="company-logo-section">
+                                        {logo_html}
+                                    </div>
+                                </div>
+                                <div class="header-right">
+                                    <div class="company-header-info">
+                                        <div class="company-name">{company_settings.get('company_name', 'Grow United Italia SRL')}</div>
+                                        <div>
+                                            {address_html}
+                                        </div>
+                                        <div>{company_settings.get('email', 'administration@growunited.it')}</div>
+                                        <div>{company_settings.get('website', 'www.canna-it.com')}</div>
+                                        <div>IVA {company_settings.get('vat_number', 'IT13328670966')}</div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
 
-                        <!-- Items Table -->
-                        <table class="quote-table">
-                            <thead>
-                                <tr>
-                                    <th class="serial-col">S.No.</th>
-                                    <th class="desc-col">Description</th>
-                                    <th class="qty-col">Quantity</th>
-                                    <th class="tax-col">VAT</th>
-                                    <th class="price-col">Sale Price</th>
-                                    <th class="disc-col">Discount (%)</th>
-                                    <th class="price-col">Price</th>
-                                    <th class="total-col">Total</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-        """
-        
-        # Add line items
-        for idx, item in enumerate(line_items, start=1):
-            total_price = item.get('quantity', 0) * item.get('unit_price', 0)
-            # Handle discount like QuotePrint.jsx: discount?.type === 'percentage' ? discount.value : 0
-            discount_value = discount.get('value', 0) if discount.get('type') == 'percentage' else 0
-            discounted_price = item.get('unit_price', 0) * (1 - discount_value / 100)
+                            <!-- Main Title -->
+                            <div class="quotation-title">Quotation No. {quotation_number}</div>
+
+                            <!-- Meta Information -->
+                            <div class="meta-grid">
+                                <div class="meta-item">
+                                    <div class="meta-label">Quotation Date:</div>
+                                    <div class="meta-value">{format_date(date)}</div>
+                                </div>
+                                <div class="meta-item">
+                                    <div class="meta-label">Delivery Date:</div>
+                                    <div class="meta-value">{format_date(valid_until)}</div>
+                                </div>
+                                <div class="meta-item">
+                                    <div class="meta-label">Payment Term:</div>
+                                    <div class="meta-value">Prepaid</div>
+                                </div>
+                            </div>
+
+                            <div class="additional-meta">
+                                <div class="meta-item">
+                                    <div class="meta-label">Order Contact:</div>
+                                    <div class="meta-value">{customer.get('company_name', '')}, {customer.get('contact_person', '')}</div>
+                                    <div class="meta-value">{customer.get('address', '')}</div>
+                                </div>
+                                <div class="meta-item">
+                                    <div class="meta-label">Your Reference:</div>
+                                    <div class="meta-value">ORDER No. {quotation_number}</div>
+                                </div>
+                                <div class="meta-item">
+                                    <div class="meta-label">Discount:</div>
+                                    <div class="meta-value">
+                                        {format_currency(totals.get('discountAmount', 0))} of {format_currency(totals.get('subtotal', 0))}
+                                    </div>
+                                </div>
+                            </div>
+                """
             
-            # Get product details - match QuotePrint.jsx: item.product_name_snapshot || item.product_name
-            display_name = item.get('product_name_snapshot') or item.get('product_name') or item.get('description', '')
-            # Match QuotePrint.jsx: item.product_code_snapshot || item.sku
-            display_sku = item.get('product_code_snapshot') or item.get('sku', '')
+            # Items Table - Each page gets its own table with exactly the items for that page
+            html += f"""
+                            <!-- Items Table - Page {page_index + 1} -->
+                            <table class="quote-table" style="page-break-inside: avoid; break-inside: avoid;">
+                                <thead>
+                                    <tr>
+                                        <th class="serial-col">S.No.</th>
+                                        <th class="desc-col">Description</th>
+                                        <th class="qty-col">Quantity</th>
+                                        <th class="tax-col">VAT</th>
+                                        <th class="price-col">Sale Price</th>
+                                        <th class="disc-col">Discount (%)</th>
+                                        <th class="price-col">Price</th>
+                                        <th class="total-col">Total</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+            """
+            
+            # Add line items for this page
+            for item_index, item in enumerate(page_items):
+                total_price = item.get('quantity', 0) * item.get('unit_price', 0)
+                # Handle discount like QuotePrint.jsx: discount?.type === 'percentage' ? discount.value : 0
+                discount_value = discount.get('value', 0) if discount.get('type') == 'percentage' else 0
+                discounted_price = item.get('unit_price', 0) * (1 - discount_value / 100)
+                
+                # Get product details - match QuotePrint.jsx: item.product_name_snapshot || item.product_name
+                display_name = item.get('product_name_snapshot') or item.get('product_name') or item.get('description', '')
+                # Match QuotePrint.jsx: item.product_code_snapshot || item.sku
+                display_sku = item.get('product_code_snapshot') or item.get('sku', '')
+                
+                # Use per-item VAT rate like QuotePrint.jsx: item.vat_rate != null ? item.vat_rate : defaultVatRate
+                item_vat_rate = item.get('vat_rate') if item.get('vat_rate') is not None else default_vat_rate
+                item_number = start_item_number + item_index
+                
+                html += f"""
+                                    <tr>
+                                        <td class="serial-col">{item_number}</td>
+                                        <td class="desc-col">
+                                            <div>
+                                                <div style="font-weight: bold; margin-bottom: 2px;">{display_name}</div>
+                                                <div style="font-size: 10px; color: #666;">{display_sku}</div>
+                                            </div>
+                                        </td>
+                                        <td class="qty-col">{item.get('quantity', 0):.3f}</td>
+                                        <td class="tax-col">VAT at {item_vat_rate}%</td>
+                                        <td class="price-col">{format_currency(item.get('unit_price', 0))}</td>
+                                        <td class="disc-col">{discount_value}%</td>
+                                        <td class="price-col">{format_currency(discounted_price)}</td>
+                                        <td class="total-col">{format_currency(total_price * (1 - discount_value / 100))}</td>
+                                    </tr>
+                """
             
             html += f"""
-                                <tr>
-                                    <td class=\"serial-col\">{idx}</td>
-                                    <td class="desc-col">
-                                        <div>
-                                            <div style="font-weight: bold; margin-bottom: 2px;">{display_name}</div>
-                                            <div style="font-size: 10px; color: #666;">{display_sku}</div>
-                                        </div>
-                                    </td>
-                                    <td class="qty-col">{item.get('quantity', 0):.3f}</td>
-                                    <td class="tax-col">VAT at {vat_rate}%</td>
-                                    <td class="price-col">{format_currency(item.get('unit_price', 0))}</td>
-                                    <td class="disc-col">{discount_value}%</td>
-                                    <td class="price-col">{format_currency(discounted_price)}</td>
-                                    <td class="total-col">{format_currency(total_price * (1 - discount_value / 100))}</td>
-                                </tr>
-            """
-        
-        html += f"""
-                            </tbody>
-                        </table>
-
-                        <!-- Totals Section - Right Aligned -->
-                        <div class="totals-section">
-                            <table class="totals-table" style="margin-left: auto; margin-right: 0;">
-                                <tr class="totals-row">
-                                    <td style="text-align: left; padding-right: 20px; padding-bottom: 6px; border-bottom: 1px solid #eee;">Total Without VAT</td>
-                                    <td style="text-align: right; padding-bottom: 6px; border-bottom: 1px solid #eee;">{format_currency((totals.get('subtotal', 0) - totals.get('discountAmount', 0)))}</td>
-                                </tr>
-                                
-                                <tr class="totals-row">
-                                    <td style="text-align: left; padding-right: 20px; padding: 6px 0; border-bottom: 1px solid #eee;">Discount</td>
-                                    <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">-{format_currency(totals.get('discountAmount', 0))}</td>
-                                </tr>
-                                
-                                <tr class="payment-term-section">
-                                    <td style="text-align: left; padding-right: 20px; padding: 6px 0; border-bottom: 1px solid #eee; font-weight: bold;">Payment Term</td>
-                                    <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee; font-weight: bold;">Prepaid</td>
-                                </tr>
-                                
-                                <tr class="totals-row">
-                                    <td style="text-align: left; padding-right: 20px; padding: 6px 0; border-bottom: 1px solid #eee;">VAT ({vat_rate}%)</td>
-                                    <td style="text-align: right; padding: 6px 0; border-bottom: 1px solid #eee;">{format_currency(totals.get('vatAmount', totals.get('taxAmount', 0)))}</td>
-                                </tr>
-                                
-                                <tr class="totals-row total-final">
-                                    <td style="text-align: left; padding-right: 20px; padding: 10px 0; border-top: 2px solid #333; border-bottom: 2px solid #333; font-weight: bold; font-size: 16px;">Total</td>
-                                    <td style="text-align: right; padding: 10px 0; border-top: 2px solid #333; border-bottom: 2px solid #333; font-weight: bold; font-size: 16px;">{format_currency(totals.get('total', 0))}</td>
-                                </tr>
+                                </tbody>
                             </table>
-                        </div>
-
-                        <!-- Notes Section -->
-        """
-        
-        if notes:
-            html += f"""
-                        <div class="notes-section" style="margin-top: 20px; margin-bottom: 40px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px;">
-                            <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">Additional Notes:</div>
-                            <div style="font-size: 12px; line-height: 1.5; white-space: pre-wrap;">{notes}</div>
-                        </div>
+                            
+                            <!-- Spacing before footer to prevent overlap -->
+                            <div style="height: 20px; page-break-inside: avoid;"></div>
             """
+            
+            # Totals Section - only on last page
+            if is_last_page:
+                html += f"""
+                            <!-- Totals Section -->
+                            <div class="totals-section">
+                                <table class="totals-table" style="margin-left: auto; margin-right: 0;">
+                                    <tr class="totals-row">
+                                        <td>Total Without VAT</td>
+                                        <td>{format_currency((totals.get('subtotal', 0) - totals.get('discountAmount', 0)))}</td>
+                                    </tr>
+                                    
+                                    <!-- Add Discount Total -->
+                                    <tr class="totals-row">
+                                        <td>Discount</td>
+                                        <td>-{format_currency(totals.get('discountAmount', 0))}</td>
+                                    </tr>
+                                    
+                                    <tr class="payment-term-section">
+                                        <td>Payment Term</td>
+                                        <td>Prepaid</td>
+                                    </tr>
+                                    
+                                    <tr class="totals-row">
+                                        <td>Total VAT</td>
+                                        <td>{format_currency(totals.get('vatAmount', totals.get('taxAmount', 0)))}</td>
+                                    </tr>
+                                    
+                                    <tr class="totals-row total-final">
+                                        <td>Total</td>
+                                        <td>{format_currency(totals.get('total', 0))}</td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Notes Section -->
+                """
+                
+                if notes:
+                    html += f"""
+                            <div class="notes-section" style="margin-top: 20px; margin-bottom: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px;">
+                                <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">Additional Notes:</div>
+                                <div style="font-size: 12px; line-height: 1.5; white-space: pre-wrap;">{notes}</div>
+                            </div>
+                    """
+            
+            # Add extra spacing on last page if totals/notes are present
+            if is_last_page:
+                html += f"""
+                            <!-- Extra spacing before footer on last page -->
+                            <div style="height: 20px;"></div>
+                """
+            
+            html += f"""
+                            <!-- Footer - Fixed to bottom of each page -->
+                            <div class="footer">
+                                <div class="footer-center">
+                                    <div class="bank-info-compact">
+                                        <strong>Bank Details:</strong> {bank_name_branch or 'BANCA PASSADORE & C. S.P.A. - CORSO MATTEOTTI, 7 - MILANO 20121'} | 
+                                        Account nr.: {bank_account_number or '1118520'} | 
+                                        IBAN: {bank_iban or 'IT87I0333201600000001118520'} | 
+                                        BIC/Swift: {bank_bic_swift or 'PASBITGG'}
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Page Number - Fixed to bottom of each page -->
+                            <div class="page-number">
+                                Page: {page_index + 1} / {len(item_pages)}
+                            </div>
+                        </div>
+                    </div>
+            """
+            
+            # Explicit page break enforcement - each page-wrapper should force a new page
+            # The page-break-after: always on page-wrapper should handle this
         
         html += f"""
-                        <!-- Spacing before footer -->
-                        <div style="height: 40px;"></div>
-                    </div>
                 </div>
-
-                <!-- Footer - Fixed to Bottom -->
-                <div class="footer">
-                    <div class="footer-left">
-                        <div class="company-name">{company_settings.get('company_name', 'Grow United Italia SRL')}</div>
-                        <div>{address_html if address_html else 'Via Paleocapa 1<br>Milano, 20121<br>Italy'}</div>
-                        <div>{company_email or 'administration@growunited.it'}</div>
-                        <div>{company_website or 'www.canna-it.com'}</div>
-                        <div>IVA {vat_number or 'IT13328670966'}</div>
-                    </div>
-                    <div class="footer-right">
-                        <div class="bank-title">Bank Details:</div>
-                        <div>{bank_name_branch or 'BANCA PASSADORE & C. S.P.A. - CORSO MATTEOTTI, 7 - MILANO 20121'}</div>
-                        <div>{bank_address_html if bank_address_html else ''}</div>
-                        <div>Account nr.: {bank_account_number or '1118520'}</div>
-                        <div>IBAN-code: {bank_iban or 'IT87I0333201600000001118520'}</div>
-                        <div>BIC/Swift: {bank_bic_swift or 'PASBITGG'}</div>
-                    </div>
-                </div>
-
-                <!-- Page Number -->
-                <div class="page-number">Page: 1 / 1</div>
             </div>
         </body>
         </html>
