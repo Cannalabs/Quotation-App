@@ -9,10 +9,13 @@ import { Command, CommandInput, CommandItem, CommandList, CommandEmpty, CommandG
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Package, Plus, Trash2, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useCompanySettings } from "@/contexts/CompanySettingsContext";
 
 export default function ProductLineItems({ products, lineItems, setLineItems, disabled }) {
   const [showProductSelector, setShowProductSelector] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const { companySettings } = useCompanySettings();
+  const defaultVatRate = companySettings?.default_vat_rate ?? 4;
 
   const addProduct = (product) => {
     const existingIndex = lineItems.findIndex((item) => item.id === product.id);
@@ -44,9 +47,9 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
     else if (field === 'unit_price') {
       updatedItems[index][field] = (value === '' || value == null || value === '.') ? 0 : Math.max(0, parseFloat(value) || 0);
     }
-    // Ensure vat_rate is a number >= 0 or null/empty
+    // Ensure vat_rate is an integer between 0 and 100 or null/empty (no decimals allowed)
     else if (field === 'vat_rate') {
-      updatedItems[index][field] = (value === '' || value == null) ? null : Math.max(0, parseFloat(value) || 0);
+      updatedItems[index][field] = (value === '' || value == null) ? null : Math.min(100, Math.max(0, parseInt(value, 10) || 0));
     }
     else {
       updatedItems[index][field] = value;
@@ -168,19 +171,23 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                   <label className="text-xs text-slate-600 mb-1 block">VAT Rate (%)</label>
                   <Input
                     type="number"
-                    step="0.1"
+                    step="1"
                     min="0"
                     max="100"
                     value={item.vat_rate != null ? String(item.vat_rate) : ''}
                     onChange={(e) => {
                       const inputVal = e.target.value;
+                      // Prevent decimal input - only allow whole numbers
+                      if (inputVal.includes('.')) {
+                        return;
+                      }
                       if (inputVal === '') {
                         const updatedItems = [...lineItems];
                         updatedItems[index].vat_rate = '';
                         setLineItems(updatedItems);
                       } else {
-                        const val = parseFloat(inputVal);
-                        if (!isNaN(val) && val >= 0) {
+                        const val = parseInt(inputVal, 10);
+                        if (!isNaN(val) && val >= 0 && val <= 100) {
                           updateLineItem(index, 'vat_rate', val);
                         }
                       }
@@ -190,12 +197,16 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                       if (inputVal === '') {
                         updateLineItem(index, 'vat_rate', null);
                       } else {
-                        const val = parseFloat(inputVal);
-                        updateLineItem(index, 'vat_rate', isNaN(val) || val < 0 ? null : val);
+                        const val = parseInt(inputVal, 10);
+                        if (isNaN(val) || val < 0 || val > 100) {
+                          updateLineItem(index, 'vat_rate', null);
+                        } else {
+                          updateLineItem(index, 'vat_rate', val);
+                        }
                       }
                     }}
                     className="clay-inset bg-white/80 border-none rounded-xl h-10"
-                    placeholder="Default"
+                    placeholder={String(defaultVatRate)}
                     disabled={disabled}
                   />
                 </div>
@@ -293,19 +304,23 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                     <td className="p-2 align-middle" style={{ width: '12%' }}>
                       <Input
                         type="number"
-                        step="0.1"
+                        step="1"
                         min="0"
                         max="100"
                         value={item.vat_rate != null ? String(item.vat_rate) : ''}
                         onChange={(e) => {
                           const inputVal = e.target.value;
+                          // Prevent decimal input - only allow whole numbers
+                          if (inputVal.includes('.')) {
+                            return;
+                          }
                           if (inputVal === '') {
                             const updatedItems = [...lineItems];
                             updatedItems[index].vat_rate = '';
                             setLineItems(updatedItems);
                           } else {
-                            const val = parseFloat(inputVal);
-                            if (!isNaN(val) && val >= 0) {
+                            const val = parseInt(inputVal, 10);
+                            if (!isNaN(val) && val >= 0 && val <= 100) {
                               updateLineItem(index, 'vat_rate', val);
                             }
                           }
@@ -315,12 +330,16 @@ export default function ProductLineItems({ products, lineItems, setLineItems, di
                           if (inputVal === '') {
                             updateLineItem(index, 'vat_rate', null);
                           } else {
-                            const val = parseFloat(inputVal);
-                            updateLineItem(index, 'vat_rate', isNaN(val) || val < 0 ? null : val);
+                            const val = parseInt(inputVal, 10);
+                            if (isNaN(val) || val < 0 || val > 100) {
+                              updateLineItem(index, 'vat_rate', null);
+                            } else {
+                              updateLineItem(index, 'vat_rate', val);
+                            }
                           }
                         }}
                         className="clay-inset bg-white/60 border-none rounded-xl h-9 w-full text-sm"
-                        placeholder="Default"
+                        placeholder={String(defaultVatRate)}
                         disabled={disabled}
                       />
                     </td>

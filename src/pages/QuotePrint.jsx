@@ -86,11 +86,25 @@ export default function QuotePrint() {
     const { company_settings, customer, items, totals, currency = 'EUR', discount, notes } = quoteData;
     const defaultVatRate = company_settings?.default_vat_rate || 4;
     
-    // Split items into chunks of 10 per page
-    const itemsPerPage = 10;
+    // Split items: first page gets 13 items, second page gets 12 items, rest get 25 items
+    const firstPageItems = 13;
+    const secondPageItems = 12;
+    const subsequentPageItems = 25;
     const itemPages = [];
-    for (let i = 0; i < items.length; i += itemsPerPage) {
-      itemPages.push(items.slice(i, i + itemsPerPage));
+    
+    if (items.length > 0) {
+      // First page: 13 items
+      itemPages.push(items.slice(0, firstPageItems));
+      
+      // Second page: 12 items only
+      if (items.length > firstPageItems) {
+        itemPages.push(items.slice(firstPageItems, firstPageItems + secondPageItems));
+        
+        // Subsequent pages: 25 items each (starting from item 26)
+        for (let i = firstPageItems + secondPageItems; i < items.length; i += subsequentPageItems) {
+          itemPages.push(items.slice(i, i + subsequentPageItems));
+        }
+      }
     }
     
     return (
@@ -153,13 +167,21 @@ export default function QuotePrint() {
             min-height: 297mm;
             height: 297mm; /* Fixed height for A4 */
             background: white;
+            page-break-inside: avoid;
+            break-inside: avoid;
+            page-break-after: always;
+            break-after: page;
+          }
+          
+          .page-wrapper:last-child {
+            page-break-after: auto;
           }
           
           .page {
             width: 210mm;
             min-height: 297mm;
             box-sizing: border-box;
-            padding: 20mm 14mm 20mm 14mm; /* Bottom padding for footer space */
+            padding: 20mm 14mm 25mm 14mm; /* Increased bottom padding for footer space */
             background: white;
             position: relative;
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
@@ -167,9 +189,8 @@ export default function QuotePrint() {
             display: inline-block;
             text-align: left; /* Reset text-align inside page - content should be left-aligned */
             page-break-after: auto;
-            page-break-inside: avoid;
+            page-break-inside: auto; /* Allow content to flow, but footer stays on page */
             overflow: visible;
-            padding-bottom: 20mm; /* Space for footer at bottom */
           }
 
           .page-header {
@@ -365,6 +386,15 @@ export default function QuotePrint() {
           
           .notes-section {
             page-break-inside: avoid;
+            break-inside: avoid;
+            margin-bottom: 30px;
+            min-height: fit-content;
+            page-break-after: avoid;
+            break-after: avoid;
+          }
+          
+          .page-with-notes {
+            padding-bottom: 30mm !important; /* Extra space for notes section */
           }
           
           /* Footer - Fixed to Bottom - Repeats on every page */
@@ -385,10 +415,14 @@ export default function QuotePrint() {
             table-layout: fixed;
             z-index: 1000;
             page-break-inside: avoid;
+            page-break-before: avoid;
+            page-break-after: avoid;
+            break-inside: avoid;
+            break-before: avoid;
+            break-after: avoid;
             visibility: visible !important;
             opacity: 1 !important;
             color: #333 !important;
-            page-break-after: avoid;
           }
           
           .footer-center {
@@ -459,8 +493,12 @@ export default function QuotePrint() {
             }
             .page-wrapper {
                 page-break-after: always !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
                 position: relative !important;
                 background: white !important;
+                height: 297mm !important;
+                min-height: 297mm !important;
             }
             .page-wrapper:last-child {
                 page-break-after: auto !important;
@@ -469,11 +507,18 @@ export default function QuotePrint() {
                 margin: 0 !important;
                 box-shadow: none !important;
                 page-break-after: auto !important;
+                height: 297mm !important;
                 min-height: 297mm !important;
-                overflow: visible !important;
-                padding-bottom: 20mm !important; /* Space for footer */
-                page-break-inside: avoid;
+                max-height: 297mm !important;
+                overflow: hidden !important;
+                padding-bottom: 25mm !important; /* Space for footer */
+                page-break-inside: avoid !important; /* Keep footer on same page */
+                break-inside: avoid !important;
                 background: white !important;
+                position: relative !important;
+              }
+              .page-with-notes {
+                padding-bottom: 30mm !important; /* Extra space for notes section */
                 position: relative !important;
             }
             .footer {
@@ -492,7 +537,11 @@ export default function QuotePrint() {
                 opacity: 1 !important;
                 z-index: 1000 !important;
                 page-break-inside: avoid !important;
+                page-break-before: avoid !important;
                 page-break-after: avoid !important;
+                break-inside: avoid !important;
+                break-before: avoid !important;
+                break-after: avoid !important;
                 color: #333 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
@@ -551,11 +600,19 @@ export default function QuotePrint() {
             {itemPages.map((pageItems, pageIndex) => {
               const isFirstPage = pageIndex === 0;
               const isLastPage = pageIndex === itemPages.length - 1;
-              const startItemNumber = pageIndex * itemsPerPage + 1;
+              // Calculate start item number based on actual items per page
+              let startItemNumber = 1;
+              if (pageIndex === 1) {
+                // Second page starts after first page items
+                startItemNumber = firstPageItems + 1;
+              } else if (pageIndex > 1) {
+                // Third page and beyond: first page (13) + second page (12) + subsequent pages
+                startItemNumber = firstPageItems + secondPageItems + (pageIndex - 2) * subsequentPageItems + 1;
+              }
               
-              return (
-                <div key={pageIndex} className="page-wrapper">
-                <div className="page">
+            return (
+              <div key={pageIndex} className="page-wrapper">
+                <div className={`page ${isLastPage && notes ? 'page-with-notes' : ''}`} style={isLastPage && notes ? { paddingBottom: '30mm' } : {}}>
                   {/* Header with Logo and Company Address - only on first page */}
                   {isFirstPage && (
                     <>
@@ -721,17 +778,26 @@ export default function QuotePrint() {
                       {notes && (
                         <div className="notes-section" style={{ 
                           marginTop: '20px', 
-                          marginBottom: '20px',
+                          marginBottom: '50px',
                           padding: '15px', 
                           background: '#f9f9f9', 
                           border: '1px solid #ddd', 
-                          borderRadius: '8px'
+                          borderRadius: '8px',
+                          pageBreakInside: 'avoid',
+                          breakInside: 'avoid',
+                          pageBreakAfter: 'avoid',
+                          breakAfter: 'avoid'
                         }}>
                           <div style={{ fontWeight: 'bold', marginBottom: '8px', fontSize: '14px' }}>Additional Notes:</div>
                           <div style={{ fontSize: '12px', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{notes}</div>
                         </div>
                       )}
                     </>
+                  )}
+                  
+                  {/* Extra spacing before footer on last page if notes are present */}
+                  {isLastPage && notes && (
+                    <div style={{ height: '20px', pageBreakInside: 'avoid', pageBreakAfter: 'avoid' }}></div>
                   )}
                   
                   {/* Footer - Fixed to bottom of each page */}
