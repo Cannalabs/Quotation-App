@@ -56,16 +56,22 @@ export default function Customers() {
 
   const handleSaveCustomer = async (customerData) => {
     try {
+      let savedCustomer;
       if (editingCustomer) {
-        await Customer.update(editingCustomer.id, customerData);
+        savedCustomer = await Customer.update(editingCustomer.id, customerData);
         setMessage({ type: "success", text: "Customer updated successfully" });
       } else {
-        await Customer.create(customerData);
+        savedCustomer = await Customer.create(customerData);
         setMessage({ type: "success", text: "Customer created successfully" });
       }
-      setShowForm(false);
-      setEditingCustomer(null);
+      
+      // Keep form open and update editingCustomer with saved data
+      setEditingCustomer(savedCustomer);
+      setShowForm(true); // Keep form open
+      
+      // Reload customers in the background to refresh the list
       loadCustomers();
+      
       setTimeout(() => setMessage({ type: "", text: "" }), 3000);
     } catch (error) {
       setMessage({ type: "error", text: "Failed to save customer" });

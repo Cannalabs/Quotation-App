@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +19,34 @@ export default function ProductForm({ product, onSave, onCancel }) {
     vat_rate: product?.vat_rate || "",
     is_active: product?.is_active !== false
   });
+
+  // Update form data when product prop changes
+  useEffect(() => {
+    if (product) {
+      setFormData({
+        name: product.name || "",
+        description: product.description || "",
+        sku: product.sku || "",
+        unit_price: product.unit_price || "",
+        currency: product.currency || "EUR",
+        category: product.category || "",
+        vat_rate: product.vat_rate || "",
+        is_active: product.is_active !== false
+      });
+    } else {
+      // Reset form when product is null (new product)
+      setFormData({
+        name: "",
+        description: "",
+        sku: "",
+        unit_price: "",
+        currency: "EUR",
+        category: "",
+        vat_rate: "",
+        is_active: true
+      });
+    }
+  }, [product]);
 
   const handleSubmit = (e) => {
     e.preventDefault();

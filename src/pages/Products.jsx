@@ -93,6 +93,16 @@ export default function Products() {
     localStorage.setItem('products-view', viewMode);
   }, [viewMode]);
 
+  // Scroll to top when form is opened, especially when editing
+  useEffect(() => {
+    if (showForm) {
+      // Small delay to ensure form is rendered before scrolling
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 100);
+    }
+  }, [showForm, editingProduct]);
+
   const loadProducts = async () => {
     setIsLoading(true);
     try {
@@ -117,16 +127,20 @@ export default function Products() {
 
   const handleSaveProduct = async (productData) => {
     try {
+      let savedProduct;
       if (editingProduct) {
-        await Product.update(editingProduct.id, productData);
+        savedProduct = await Product.update(editingProduct.id, productData);
         setMessage({ type: "success", text: "Product updated successfully" });
       } else {
-        await Product.create(productData);
+        savedProduct = await Product.create(productData);
         setMessage({ type: "success", text: "Product created successfully" });
       }
 
-      setShowForm(false);
-      setEditingProduct(null);
+      // Keep form open and update editingProduct with saved data
+      setEditingProduct(savedProduct);
+      setShowForm(true); // Keep form open
+      
+      // Reload products in the background to refresh the list
       loadProducts();
 
       setTimeout(() => setMessage({ type: "", text: "" }), 3000);

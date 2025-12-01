@@ -380,9 +380,12 @@ export default function QuoteBuilder() {
         text: `Quote ${newStatus === 'sent' ? 'sent' : newStatus === 'confirmed' ? 'confirmed' : 'saved'} successfully!`
       });
 
-      setTimeout(() => {
-        navigate(createPageUrl("Quotes"));
-      }, 2000);
+      // Update isConfirmed state if status is confirmed
+      if (newStatus === 'confirmed') {
+        setIsConfirmed(true);
+      }
+
+      // Don't redirect - stay on the page for all statuses
 
     } catch (error) {
       // Extract validation error message from error object
@@ -584,9 +587,7 @@ export default function QuoteBuilder() {
         text: "Quote archived successfully!"
       });
 
-      setTimeout(() => {
-        navigate(createPageUrl("Quotes"));
-      }, 2000);
+      // Don't redirect - stay on the page after archiving
     } catch (error) {
       setMessage({ type: "error", text: "Failed to archive quotation. Please try again." });
       console.error("Archive error:", error);
@@ -611,9 +612,7 @@ export default function QuoteBuilder() {
         text: "Quote unarchived successfully!"
       });
 
-      setTimeout(() => {
-        navigate(createPageUrl("Quotes"));
-      }, 2000);
+      // Don't redirect - stay on the page after unarchiving
     } catch (error) {
       setMessage({ type: "error", text: "Failed to unarchive quotation. Please try again." });
       console.error("Unarchive error:", error);
