@@ -86,23 +86,20 @@ export default function QuotePrint() {
     const { company_settings, customer, items, totals, currency = 'EUR', discount, notes } = quoteData;
     const defaultVatRate = company_settings?.default_vat_rate || 4;
     
-    // Split items: first page gets 13 items, second page gets 12 items, rest get 25 items
-    const firstPageItems = 13;
-    const secondPageItems = 12;
-    const subsequentPageItems = 25;
+    // Split items: first page gets 9 items, all other pages get 12 items (not more than 12)
+    const firstPageItems = 9;
+    const itemsPerPage = 12; // All pages after first get 12 items
     const itemPages = [];
     
     if (items.length > 0) {
-      // First page: 13 items
+      // First page: exactly 9 items (items 1-9)
       itemPages.push(items.slice(0, firstPageItems));
       
-      // Second page: 12 items only
+      // All subsequent pages: exactly 12 items each, not more (starting from item 10)
       if (items.length > firstPageItems) {
-        itemPages.push(items.slice(firstPageItems, firstPageItems + secondPageItems));
-        
-        // Subsequent pages: 25 items each (starting from item 26)
-        for (let i = firstPageItems + secondPageItems; i < items.length; i += subsequentPageItems) {
-          itemPages.push(items.slice(i, i + subsequentPageItems));
+        for (let i = firstPageItems; i < items.length; i += itemsPerPage) {
+          const pageEnd = Math.min(i + itemsPerPage, items.length);
+          itemPages.push(items.slice(i, pageEnd));
         }
       }
     }
@@ -158,6 +155,13 @@ export default function QuotePrint() {
             align-items: center;
             position: relative;
             background: white;
+            margin: 0;
+            padding: 0;
+          }
+          
+          .page-container::after {
+            display: none;
+            content: '';
           }
           
           .page-wrapper {
@@ -174,14 +178,16 @@ export default function QuotePrint() {
           }
           
           .page-wrapper:last-child {
-            page-break-after: auto;
+            page-break-after: avoid;
+            break-after: avoid;
+            margin-bottom: 0;
           }
           
           .page {
             width: 210mm;
             min-height: 297mm;
             box-sizing: border-box;
-            padding: 20mm 14mm 25mm 14mm; /* Increased bottom padding for footer space */
+            padding: 20mm 14mm 25mm 14mm; /* Bottom padding for footer space */
             background: white;
             position: relative;
             box-shadow: 0 0 5px rgba(0,0,0,0.1);
@@ -404,12 +410,15 @@ export default function QuotePrint() {
             left: 0;
             right: 0;
             width: 100%;
-            height: 15mm;
-            padding: 3mm 14mm;
+            min-height: 20mm;
+            max-height: 25mm;
+            height: auto;
+            padding: 2mm 14mm 0 14mm;
+            margin: 0;
             background: white;
             border-top: 1px solid #ddd;
-            font-size: 10px;
-            line-height: 1.3;
+            font-size: 9px;
+            line-height: 1.4;
             box-sizing: border-box;
             display: table;
             table-layout: fixed;
@@ -434,17 +443,19 @@ export default function QuotePrint() {
           
           .bank-info-compact {
             text-align: center;
-            font-size: 10px;
-            line-height: 1.4;
+            font-size: 9px;
+            line-height: 1.5;
             color: #333;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
           
           /* Page Number - Fixed to repeat on every page */
           .page-number {
             position: absolute;
-            bottom: 8mm;
+            bottom: 6mm;
             right: 14mm;
-            font-size: 11px;
+            font-size: 10px;
             z-index: 11;
             color: #333;
             white-space: nowrap;
@@ -463,7 +474,9 @@ export default function QuotePrint() {
           }
           
           .page-wrapper:last-child {
-            page-break-after: auto;
+            page-break-after: avoid;
+            break-after: avoid;
+            margin-bottom: 0;
           }
           
           .page {
@@ -490,6 +503,8 @@ export default function QuotePrint() {
                 display: block !important;
                 width: auto !important;
                 background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
             .page-wrapper {
                 page-break-after: always !important;
@@ -501,7 +516,32 @@ export default function QuotePrint() {
                 min-height: 297mm !important;
             }
             .page-wrapper:last-child {
-                page-break-after: auto !important;
+                page-break-after: avoid !important;
+                break-after: avoid !important;
+                margin-bottom: 0 !important;
+                height: auto !important;
+                min-height: auto !important;
+                max-height: none !important;
+            }
+            
+            .page-wrapper:last-child .page {
+                height: auto !important;
+                min-height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+            }
+            
+            /* Ensure no extra spacing after last page */
+            .page-container > *:last-child {
+                margin-bottom: 0 !important;
+                padding-bottom: 0 !important;
+            }
+            
+            /* Prevent any content after last page from creating new page */
+            .page-container::after,
+            .print-document::after {
+                display: none !important;
+                content: none !important;
             }
             .page {
                 margin: 0 !important;
@@ -527,8 +567,11 @@ export default function QuotePrint() {
                 left: 0 !important;
                 right: 0 !important;
                 width: 100% !important;
-                height: 15mm !important;
-                padding: 3mm 14mm !important;
+                min-height: 20mm !important;
+                max-height: 25mm !important;
+                height: auto !important;
+                padding: 2mm 14mm 0 14mm !important;
+                margin: 0 !important;
                 background: white !important;
                 border-top: 1px solid #ddd !important;
                 display: table !important;
@@ -545,6 +588,8 @@ export default function QuotePrint() {
                 color: #333 !important;
                 -webkit-print-color-adjust: exact !important;
                 print-color-adjust: exact !important;
+                font-size: 9px !important;
+                line-height: 1.4 !important;
             }
             .footer-center {
                 display: table-cell !important;
@@ -554,14 +599,17 @@ export default function QuotePrint() {
             }
             .bank-info-compact {
                 text-align: center !important;
-                font-size: 10px !important;
+                font-size: 9px !important;
+                line-height: 1.5 !important;
                 color: #333 !important;
+                word-wrap: break-word !important;
+                overflow-wrap: break-word !important;
             }
             .page-number {
                 position: absolute !important;
-                bottom: 8mm !important;
+                bottom: 6mm !important;
                 right: 14mm !important;
-                font-size: 11px !important;
+                font-size: 10px !important;
                 visibility: visible !important;
                 opacity: 1 !important;
                 z-index: 1001 !important;
@@ -602,12 +650,12 @@ export default function QuotePrint() {
               const isLastPage = pageIndex === itemPages.length - 1;
               // Calculate start item number based on actual items per page
               let startItemNumber = 1;
-              if (pageIndex === 1) {
-                // Second page starts after first page items
-                startItemNumber = firstPageItems + 1;
-              } else if (pageIndex > 1) {
-                // Third page and beyond: first page (13) + second page (12) + subsequent pages
-                startItemNumber = firstPageItems + secondPageItems + (pageIndex - 2) * subsequentPageItems + 1;
+              if (pageIndex === 0) {
+                // First page starts at 1
+                startItemNumber = 1;
+              } else {
+                // All pages after first: first page (9) + (pageIndex - 1) * 12 items per page
+                startItemNumber = firstPageItems + (pageIndex - 1) * itemsPerPage + 1;
               }
               
             return (
@@ -795,10 +843,7 @@ export default function QuotePrint() {
                     </>
                   )}
                   
-                  {/* Extra spacing before footer on last page if notes are present */}
-                  {isLastPage && notes && (
-                    <div style={{ height: '20px', pageBreakInside: 'avoid', pageBreakAfter: 'avoid' }}></div>
-                  )}
+                  {/* No extra spacing - footer is positioned absolutely at bottom */}
                   
                   {/* Footer - Fixed to bottom of each page */}
                   <div className="footer">
